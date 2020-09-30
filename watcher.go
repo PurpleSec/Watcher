@@ -195,6 +195,7 @@ func NewWatcher(c Config, cls bool) (*Watcher, error) {
 	h := oauth1.NewConfig(c.Twitter.ConsumerKey, c.Twitter.ConsumerSecret).Client(
 		context.Background(), oauth1.NewToken(c.Twitter.AccessKey, c.Twitter.AccessSecret),
 	)
+	h.Timeout = c.Timeouts.Web
 	t := twitter.NewClient(h)
 	if _, _, err := t.Accounts.VerifyCredentials(nil); err != nil {
 		return nil, &errorval{s: "login to Twitter failed", e: err}
@@ -233,7 +234,6 @@ func NewWatcher(c Config, cls bool) (*Watcher, error) {
 		m.Close()
 		return nil, &errorval{s: "error setting up database schema", e: err}
 	}
-	h.Timeout = c.Timeouts.Web
 	w := &Watcher{
 		sql:         m,
 		bot:         b,
