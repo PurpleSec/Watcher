@@ -151,24 +151,24 @@ func Cmdline() {
 
 	b, err := ioutil.ReadFile(file)
 	if err != nil {
-		os.Stderr.WriteString(`Error reading config file "` + file + `": ` + err.Error())
+		os.Stderr.WriteString(`Error reading config file "` + file + `": ` + err.Error() + "!\n")
 		os.Exit(1)
 	}
 
 	var c Config
 	if err := json.Unmarshal(b, &c); err != nil {
-		os.Stderr.WriteString(`Error parsing config file "` + file + `": ` + err.Error())
+		os.Stderr.WriteString(`Error parsing config file "` + file + `": ` + err.Error() + "!\n")
 		os.Exit(1)
 	}
 
 	w, err := NewWatcher(c, clear)
 	if err != nil {
-		os.Stderr.WriteString("Error during setup: " + err.Error())
+		os.Stderr.WriteString("Error during setup: " + err.Error() + "!\n")
 		os.Exit(1)
 	}
 
 	if err := w.Start(context.Background()); err != nil {
-		os.Stderr.WriteString("Error during operation: " + err.Error())
+		os.Stderr.WriteString("Error during operation: " + err.Error() + "!\n")
 		os.Exit(1)
 	}
 }

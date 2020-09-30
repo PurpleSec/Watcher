@@ -17,7 +17,7 @@
 package watcher
 
 var cleanStatements = []string{
-	`DROP TABLES IF EXISTS Subscriptions`,
+	`DROP TABLES IF EXISTS Subscribers`,
 	`DROP TABLES IF EXISTS Mappings`,
 	`DROP TABLES IF EXISTS Users`,
 	`DROP FUNCTION IF EXISTS GetUserID`,
@@ -66,7 +66,7 @@ var setupStatements = []string{
 	BEGIN
 		SELECT M.MapName FROM Mappings M
 			INNER JOIN Subscribers S ON M.MapID = S.SubMap
-		WHERE S.SubUser = (SELECT GetUs(ChatID));
+		WHERE S.SubUser = (SELECT GetUserID(ChatID));
 	END;`,
 	`CREATE PROCEDURE IF NOT EXISTS RemoveAllSubscriptions(ChatID INT(64))
 	BEGIN
