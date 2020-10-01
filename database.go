@@ -60,7 +60,7 @@ var setupStatements = []string{
 		START TRANSACTION;
 		DELETE FROM Mappings WHERE (SELECT COUNT(SubID) FROM Subscribers WHERE SubMap = MapID) = 0;
 		COMMIT;
-		SELECT MapID, MapName, MapTwitter FROM Mappings;
+		SELECT (SELECT COUNT(MapID) FROM Mappings) As MapCount, MapID, MapName, MapTwitter FROM Mappings;
 	END;`,
 	`CREATE PROCEDURE IF NOT EXISTS GetSubscription(ChatID INT(64))
 	BEGIN
@@ -124,7 +124,7 @@ var queryStatements = map[string]string{
 	"set":      `UPDATE Mappings SET MapTwitter = ? WHERE MapID = ?`,
 	"del_all":  `CALL RemoveAllSubscriptions(?)`,
 	"get_all":  `CALL GetAllSubscriptions()`,
-	"get_list": `SELECT MapTwitter FROM Mappings`,
+	"get_list": `SELECT (SELECT COUNT(MapID) FROM Mappings) As MapCount, MapTwitter FROM Mappings`,
 	"get_notify": `SELECT U.UserChat FROM Users U
 						INNER JOIN Subscribers S ON S.SubUser = U.UserID
 						INNER JOIN Mappings M ON M.MapID = S.SubMap

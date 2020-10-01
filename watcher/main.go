@@ -1,7 +1,30 @@
 package main
 
-import "github.com/iDigitalFlame/watcher"
+import (
+	"flag"
+	"os"
+
+	"github.com/iDigitalFlame/watcher"
+)
 
 func main() {
-	watcher.Cmdline()
+	c, err := watcher.Cmdline()
+	if c == nil && err == nil {
+		os.Exit(0)
+	}
+
+	if err == flag.ErrHelp {
+		os.Exit(2)
+	}
+
+	w, err := watcher.NewWatcher(*c)
+	if err != nil {
+		os.Stderr.WriteString("Error: " + err.Error() + "!\n")
+		os.Exit(1)
+	}
+
+	if err := w.Run(); err != nil {
+		os.Stderr.WriteString("Error: " + err.Error() + "!\n")
+		os.Exit(1)
+	}
 }

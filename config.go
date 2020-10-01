@@ -17,7 +17,6 @@
 package watcher
 
 import (
-	"context"
 	"encoding/json"
 	"flag"
 	"io/ioutil"
@@ -29,16 +28,6 @@ import (
 
 	// Import for the Golang MySQL driver
 	_ "github.com/go-sql-driver/mysql"
-)
-
-const (
-	bufferSize      = 256
-	bufferSmallSize = 32
-
-	timeoutWeb      = time.Second * 15
-	timeoutResolve  = time.Hour * 6
-	timeoutBackoff  = time.Millisecond * 250
-	timeoutDatabase = time.Second * 60
 )
 
 const config = `{
@@ -55,11 +44,9 @@ const config = `{
 	"blocked": [],
 	"allowed": [],
 	"timeouts": {
-		"web": 15000000000,
+		"backoff": 5000000000,
 		"resolve": 21600000000000,
-		"backoff": 250000000,
-		"database": 60000000000,
-		"telegram": 15000000000
+		"database": 180000000000
 	},
 	"twitter": {
 		"access_key": "",
@@ -80,8 +67,6 @@ Usage:
   -c              Clear the database of ALL DATA before starting up.
 `
 
-var wake struct{}
-
 type log struct {
 	File  string `json:"file"`
 	Level int    `json:"level"`
@@ -93,9 +78,11 @@ type auth struct {
 	ConsumerSecret string `json:"consumer_secret"`
 }
 
-// Config is a struct that can be used to create and set parameters of the Watcher instance.
+// Config is a struct that can be used to create and set parameters of the Watcher instance. This struct can be
+// used in the NewWaker function to return a Waker instance.
 type Config struct {
 	Log      log      `json:"log"`
+	Clear    bool     `json:"-"`
 	Twitter  auth     `json:"twitter"`
 	Blocked  []string `json:"blocked"`
 	Allowed  []string `json:"allowed"`
@@ -104,11 +91,9 @@ type Config struct {
 	Database database `json:"db"`
 }
 type timeouts struct {
-	Web      time.Duration `json:"web"`
 	Resolve  time.Duration `json:"resolver"`
 	Backoff  time.Duration `json:"backoff"`
 	Database time.Duration `json:"database"`
-	Telegram time.Duration `json:"telegram"`
 }
 type database struct {
 	Name     string `json:"database"`
@@ -117,61 +102,6 @@ type database struct {
 	Password string `json:"password"`
 }
 
-// Cmdline will create and process the Watcher instance based on the supplied command line arguments.
-// This will quit using 'os.Exit' when an error occurs and will print a message to the standard error of the
-// console. This function will block until operation completed.
-func Cmdline() {
-	var (
-		args        = flag.NewFlagSet("Twitter Watcher Telegram Bot", flag.ExitOnError)
-		file        string
-		clear, dump bool
-	)
-	args.Usage = func() {
-		os.Stderr.WriteString(usage)
-		os.Exit(2)
-	}
-	args.StringVar(&file, "f", "", "Configuration file path.")
-	args.BoolVar(&dump, "d", false, "Dump the default configuration and exit.")
-	args.BoolVar(&clear, "c", false, "Clear the database of ALL DATA before starting up.")
-
-	if err := args.Parse(os.Args[1:]); err != nil {
-		os.Stderr.WriteString(usage)
-		os.Exit(2)
-	}
-
-	if len(file) == 0 && !dump {
-		os.Stderr.WriteString(usage)
-		os.Exit(2)
-	}
-
-	if dump {
-		os.Stdout.WriteString(config)
-		os.Exit(0)
-	}
-
-	b, err := ioutil.ReadFile(file)
-	if err != nil {
-		os.Stderr.WriteString(`Error reading config file "` + file + `": ` + err.Error() + "!\n")
-		os.Exit(1)
-	}
-
-	var c Config
-	if err := json.Unmarshal(b, &c); err != nil {
-		os.Stderr.WriteString(`Error parsing config file "` + file + `": ` + err.Error() + "!\n")
-		os.Exit(1)
-	}
-
-	w, err := NewWatcher(c, clear)
-	if err != nil {
-		os.Stderr.WriteString("Error during setup: " + err.Error() + "!\n")
-		os.Exit(1)
-	}
-
-	if err := w.Start(context.Background()); err != nil {
-		os.Stderr.WriteString("Error during operation: " + err.Error() + "!\n")
-		os.Exit(1)
-	}
-}
 func (c *Config) check() error {
 	if len(c.Twitter.AccessKey) == 0 {
 		return &errorval{s: "missing Twitter access key"}
@@ -197,20 +127,78 @@ func (c *Config) check() error {
 	if len(c.Database.Username) == 0 {
 		return &errorval{s: "missing database username"}
 	}
-	if c.Timeouts.Web == 0 {
-		c.Timeouts.Web = timeoutWeb
-	}
 	if c.Timeouts.Resolve == 0 {
-		c.Timeouts.Resolve = timeoutResolve
+		c.Timeouts.Resolve = time.Hour * 6
 	}
 	if c.Timeouts.Backoff == 0 {
-		c.Timeouts.Backoff = timeoutBackoff
+		c.Timeouts.Backoff = time.Second * 5
 	}
 	if c.Timeouts.Database == 0 {
-		c.Timeouts.Database = timeoutDatabase
-	}
-	if c.Timeouts.Telegram == 0 {
-		c.Timeouts.Telegram = timeoutWeb
+		c.Timeouts.Database = time.Minute * 3
 	}
 	return nil
+}
+func (e errorval) Error() string {
+	if e.e == nil {
+		return e.s
+	}
+	return e.s + ": " + e.e.Error()
+}
+func (e errorval) Unwrap() error {
+	return e.e
+}
+
+// Cmdline will create and process the command line flags. This function will return the proper Config struct to
+// use with 'NewWatcher'. This function will return an error if it occurs or "flag.ErrHelp" if the usage string
+// is displayed. If config and the error are both nil, the default configuration is written to stdout and the process
+// should exit with 0.
+func Cmdline() (*Config, error) {
+	var (
+		args = flag.NewFlagSet("Twitter Watcher Telegram Bot", flag.ExitOnError)
+		c    Config
+		file string
+		dump bool
+	)
+	args.Usage = func() {
+		os.Stderr.WriteString(usage)
+		os.Exit(2)
+	}
+	args.StringVar(&file, "f", "", "Configuration file path.")
+	args.BoolVar(&dump, "d", false, "Dump the default configuration and exit.")
+	args.BoolVar(&c.Clear, "c", false, "Clear the database of ALL DATA before starting up.")
+	if err := args.Parse(os.Args[1:]); err != nil {
+		os.Stderr.WriteString(usage)
+		return nil, flag.ErrHelp
+	}
+	if len(file) == 0 && !dump {
+		os.Stderr.WriteString(usage)
+		return nil, flag.ErrHelp
+	}
+	if dump {
+		os.Stdout.WriteString(config)
+		return nil, nil
+	}
+	b, err := ioutil.ReadFile(file)
+	if err != nil {
+		return nil, &errorval{s: `Error reading config file "` + file + `"`, e: err}
+	}
+	if err := json.Unmarshal(b, &c); err != nil {
+		return nil, &errorval{s: `Error parsing config file "` + file + `"`, e: err}
+	}
+	return &c, c.check()
+}
+func stringLowMatch(s, m string) bool {
+	if len(s) != len(m) {
+		return false
+	}
+	for i := range s {
+		switch {
+		case s[i] == m[i]:
+		case m[i] > 96 && s[i]+32 == m[i]:
+		case s[i] > 96 && m[i]+32 == s[i]:
+		default:
+			return false
+		}
+	}
+	return true
 }
