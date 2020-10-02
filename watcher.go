@@ -66,9 +66,9 @@ func (w *Watcher) Run() error {
 	return w.RunContext(context.Background())
 }
 
-// NewWatcher returns a new watcher instance based on the passed configuration. This function will preform any
+// New returns a new Watcher instance based on the passed configuration. This function will preform any
 // setup steps needed to start the Watcher. Once complete, use the 'Start' function to actually start the Watcher.
-func NewWatcher(c Config) (*Watcher, error) {
+func New(c Config) (*Watcher, error) {
 	l := logx.Multiple(logx.Console(logx.Level(c.Log.Level)))
 	if len(c.Log.File) > 0 {
 		f, err := logx.File(c.Log.File, logx.Append, logx.Level(c.Log.Level))

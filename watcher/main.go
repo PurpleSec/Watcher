@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"os"
 
@@ -18,9 +17,8 @@ func main() {
 		os.Exit(2)
 	}
 
-	w, err := watcher.NewWatcher(*c)
+	w, err := watcher.New(*c)
 	if err != nil {
-		errors.Unwrap(err)
 		os.Stderr.WriteString("Error: " + err.Error() + "!\n")
 		os.Exit(1)
 	}
