@@ -190,7 +190,7 @@ func (w *Watcher) threadTwitter(x context.Context, g *sync.WaitGroup, c chan uin
 				if int8(a) > i {
 					i = int8(a)
 				}
-				w.log.Trace("Ignoring dropped request! (%d, do %d)", a, i)
+				w.log.Trace("Ignoring dropped request! (%d, next %d)", a, i)
 				break
 			}
 			w.log.Debug("Attempting to reload Twitter stream...")

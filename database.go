@@ -125,8 +125,6 @@ var queryStatements = map[string]string{
 	"del_all":  `CALL RemoveAllSubscriptions(?)`,
 	"get_all":  `CALL GetAllSubscriptions()`,
 	"get_list": `SELECT (SELECT COUNT(MapID) FROM Mappings) As MapCount, MapTwitter FROM Mappings`,
-	"get_notify": `SELECT U.UserChat FROM Users U
-						INNER JOIN Subscribers S ON S.SubUser = U.UserID
-						INNER JOIN Mappings M ON M.MapID = S.SubMap
-					WHERE M.MapTwitter = ?`,
+	"get_notify": `SELECT U.UserChat FROM Users U INNER JOIN Subscribers S ON S.SubUser = U.UserID
+					INNER JOIN Mappings M ON M.MapID = S.SubMap WHERE M.MapTwitter = ?`,
 }

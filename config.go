@@ -180,10 +180,10 @@ func Cmdline() (*Config, error) {
 	}
 	b, err := ioutil.ReadFile(file)
 	if err != nil {
-		return nil, &errorval{s: `Error reading config file "` + file + `"`, e: err}
+		return nil, &errorval{s: `error reading config file "` + file + `"`, e: err}
 	}
 	if err := json.Unmarshal(b, &c); err != nil {
-		return nil, &errorval{s: `Error parsing config file "` + file + `"`, e: err}
+		return nil, &errorval{s: `error parsing config file "` + file + `"`, e: err}
 	}
 	return &c, c.check()
 }

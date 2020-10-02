@@ -197,7 +197,7 @@ func (w *Watcher) tweet(x context.Context, m chan<- message, t *twitter.Tweet) {
 	r.Close()
 }
 func (w *Watcher) message(x context.Context, n *telegram.Message, c chan<- uint8) string {
-	if !canUseACL(n.Chat.UserName, w.allowed, w.blocked) {
+	if !canUseACL(n.From.UserName, w.allowed, w.blocked) {
 		return denied
 	}
 	if len(n.Text) < 5 || n.Text[0] != '/' {

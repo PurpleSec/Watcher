@@ -87,33 +87,33 @@ func NewWatcher(c Config) (*Watcher, error) {
 	}
 	b, err := telegram.NewBotAPI(c.Telegram)
 	if err != nil {
-		return nil, &errorval{s: "error setting up Telegram", e: err}
+		return nil, &errorval{s: "login to Telegram failed", e: err}
 	}
 	d, err := sql.Open(
 		"mysql",
 		c.Database.Username+":"+c.Database.Password+"@"+c.Database.Server+"/"+c.Database.Name+"?multiStatements=true&interpolateParams=true",
 	)
 	if err != nil {
-		return nil, &errorval{s: "error setting up database connection", e: err}
+		return nil, &errorval{s: "database connection setup failed", e: err}
 	}
 	if d.SetConnMaxLifetime(c.Timeouts.Database); c.Clear {
 		for i := range cleanStatements {
 			if _, err := d.Exec(cleanStatements[i]); err != nil {
 				d.Close()
-				return nil, &errorval{s: "error cleaning up database schema", e: err}
+				return nil, &errorval{s: "could not clean up database schema", e: err}
 			}
 		}
 	}
 	for i := range setupStatements {
 		if _, err := d.Exec(setupStatements[i]); err != nil {
 			d.Close()
-			return nil, &errorval{s: "error setting up database schema", e: err}
+			return nil, &errorval{s: "could not set up database schema", e: err}
 		}
 	}
 	m := &mapper.Map{Database: d}
 	if err = m.Extend(queryStatements); err != nil {
 		m.Close()
-		return nil, &errorval{s: "error setting up database schema", e: err}
+		return nil, &errorval{s: "could not set up database schema", e: err}
 	}
 	return &Watcher{
 		sql:     m,
@@ -134,7 +134,7 @@ func (w *Watcher) RunContext(ctx context.Context) error {
 	r, err := w.bot.GetUpdatesChan(telegram.UpdateConfig{})
 	if err != nil {
 		w.sql.Close()
-		return &errorval{s: "error setting up Telegram receiver", e: err}
+		return &errorval{s: "could not get Telegram receiver", e: err}
 	}
 	var (
 		c = make(chan uint8, 8)
