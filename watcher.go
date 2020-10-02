@@ -94,7 +94,10 @@ func New(c Config) (*Watcher, error) {
 		c.Database.Username+":"+c.Database.Password+"@"+c.Database.Server+"/"+c.Database.Name+"?multiStatements=true&interpolateParams=true",
 	)
 	if err != nil {
-		return nil, &errorval{s: "database connection setup failed", e: err}
+		return nil, &errorval{s: `database connection "` + c.Database.Server + `" failed`, e: err}
+	}
+	if err = d.Ping(); err != nil {
+		return nil, &errorval{s: `database connection "` + c.Database.Server + `" failed`, e: err}
 	}
 	if d.SetConnMaxLifetime(c.Timeouts.Database); c.Clear {
 		for i := range cleanStatements {
