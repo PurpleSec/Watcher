@@ -144,7 +144,7 @@ func (w *Watcher) RunContext(ctx context.Context) error {
 		x context.Context
 		g sync.WaitGroup
 	)
-	signal.Notify(s, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(s, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	x, w.cancel = context.WithCancel(ctx)
 	w.log.Info("Twitter Watcher Telegram Bot Started, spinning up threads...")
 	go w.threadSend(x, &g, m, t)
