@@ -36,6 +36,7 @@ const invalid = `I'm sorry I don't understand that command.
 
 Please use a command from the following list:
 /list
+/clear
 /add <@username1,@usernameN,..>
 /remove <@username1,@usernameN,..|clear|all>`
 const badname = `" is not a valid Twitter username!
@@ -181,7 +182,7 @@ func (w *Watcher) tweet(x context.Context, m chan<- message, t *twitter.Tweet) {
 	}
 	var (
 		c int64
-		s = "New Tweet from @" + t.User.ScreenName + "!\n\n" + t.Text + "\n\nhttps://twitter.com/" + t.User.ScreenName + "/status/" + t.IDStr
+		s = "Tweet from @" + t.User.ScreenName + "!\n\n" + t.Text + "\n\nhttps://twitter.com/" + t.User.ScreenName + "/status/" + t.IDStr
 	)
 	for r.Next() {
 		if err := r.Scan(&c); err != nil {
