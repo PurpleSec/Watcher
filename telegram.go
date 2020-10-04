@@ -49,41 +49,6 @@ var builders = sync.Pool{
 	},
 }
 
-func stringTrim(s string) string {
-	if len(s) == 0 {
-		return s
-	}
-	b := builders.Get().(*strings.Builder)
-	b.Grow(len(s))
-	for i := range s {
-		if s[i] < 33 || s[i] > 126 {
-			continue
-		}
-		b.WriteByte(s[i])
-	}
-	r := b.String()
-	b.Reset()
-	builders.Put(b)
-	return r
-}
-func stringLower(s string) string {
-	if len(s) == 0 {
-		return s
-	}
-	b := builders.Get().(*strings.Builder)
-	b.Grow(len(s))
-	for i := range s {
-		if s[i] > 64 && s[i] < 91 {
-			b.WriteByte(s[i] + 32)
-			continue
-		}
-		b.WriteByte(s[i])
-	}
-	r := b.String()
-	b.Reset()
-	builders.Put(b)
-	return r
-}
 func split(s string) ([]string, string) {
 	var (
 		v bool
@@ -97,7 +62,7 @@ func split(s string) ([]string, string) {
 	return n, ""
 }
 func validTwitter(s string) (string, bool) {
-	v := stringTrim(s)
+	v := strings.TrimSpace(s)
 	if len(v) == 0 || v[0] != '@' {
 		return v, false
 	}
@@ -211,7 +176,7 @@ func (w *Watcher) message(x context.Context, n *telegram.Message, c chan<- uint8
 	if d == -1 {
 		d = len(n.Text)
 	}
-	switch stringLower(n.Text[1:d]) {
+	switch strings.ToLower(n.Text[1:d]) {
 	case "clear":
 		if r := w.clear(x, n.Chat.ID); !r {
 			return errmsg
@@ -229,7 +194,7 @@ func (w *Watcher) message(x context.Context, n *telegram.Message, c chan<- uint8
 }
 func (w *Watcher) action(x context.Context, i int64, s string, a bool, c chan<- uint8) string {
 	if p := strings.IndexByte(s, ','); p == -1 && !a {
-		switch stringLower(stringTrim(s)) {
+		switch strings.ToLower(strings.TrimSpace(s)) {
 		case "all", "clear":
 			if r := w.clear(x, i); !r {
 				return errmsg
