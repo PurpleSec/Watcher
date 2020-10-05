@@ -27,22 +27,6 @@ import (
 	telegram "github.com/go-telegram-bot-api/telegram-bot-api"
 )
 
-const denied = `I'm sorry but my permissions do not allow you to use this service.`
-const errmsg = `I'm sorry, There seems to have been an error trying to process your request
-Please try again later.`
-const success = `Awesome! Your following list was updated!`
-const cleared = `Awesome! I have cleared your following list!`
-const invalid = `I'm sorry I don't understand that command.
-
-Please use a command from the following list:
-/list
-/clear
-/add <@username1,@usernameN,..>
-/remove <@username1,@usernameN,..|clear|all>`
-const badname = `" is not a valid Twitter username!
-
-Twitter names must start with "@" and contain no special characters or spaces.`
-
 var builders = sync.Pool{
 	New: func() interface{} {
 		return new(strings.Builder)

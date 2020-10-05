@@ -19,6 +19,8 @@ package watcher
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"io/ioutil"
 	"os"
 	"os/signal"
 	"sync"
@@ -46,98 +48,18 @@ type Watcher struct {
 	allowed []string
 	blocked []string
 }
-type resolve struct {
-	ID   int64
-	TID  int64
-	Name string
-}
 type message struct {
 	msg   telegram.MessageConfig
 	tries uint8
-}
-type errorval struct {
-	e error
-	s string
 }
 
 // Run will start the main Watcher process and all associated threads. This function will block until an
 // interrupt signal is received. This function returns any errors that occur during shutdown.
 func (w *Watcher) Run() error {
-	return w.RunContext(context.Background())
-}
-
-// New returns a new Watcher instance based on the passed configuration. This function will preform any
-// setup steps needed to start the Watcher. Once complete, use the 'Start' function to actually start the Watcher.
-func New(c Config) (*Watcher, error) {
-	l := logx.Multiple(logx.Console(logx.Level(c.Log.Level)))
-	if len(c.Log.File) > 0 {
-		f, err := logx.File(c.Log.File, logx.Append, logx.Level(c.Log.Level))
-		if err != nil {
-			return nil, &errorval{s: `error setting up log file "` + c.Log.File + `"`, e: err}
-		}
-		l.Add(f)
-	}
-	t := twitter.NewClient(
-		oauth1.NewConfig(c.Twitter.ConsumerKey, c.Twitter.ConsumerSecret).Client(
-			context.Background(), oauth1.NewToken(c.Twitter.AccessKey, c.Twitter.AccessSecret),
-		),
-	)
-	if _, _, err := t.Accounts.VerifyCredentials(nil); err != nil {
-		return nil, &errorval{s: "login to Twitter failed", e: err}
-	}
-	b, err := telegram.NewBotAPI(c.Telegram)
-	if err != nil {
-		return nil, &errorval{s: "login to Telegram failed", e: err}
-	}
-	d, err := sql.Open(
-		"mysql",
-		c.Database.Username+":"+c.Database.Password+"@"+c.Database.Server+"/"+c.Database.Name+"?multiStatements=true&interpolateParams=true",
-	)
-	if err != nil {
-		return nil, &errorval{s: `database connection "` + c.Database.Server + `" failed`, e: err}
-	}
-	if err = d.Ping(); err != nil {
-		return nil, &errorval{s: `database connection "` + c.Database.Server + `" failed`, e: err}
-	}
-	if d.SetConnMaxLifetime(c.Timeouts.Database); c.Clear {
-		for i := range cleanStatements {
-			if _, err := d.Exec(cleanStatements[i]); err != nil {
-				d.Close()
-				return nil, &errorval{s: "could not clean up database schema", e: err}
-			}
-		}
-	}
-	for i := range setupStatements {
-		if _, err := d.Exec(setupStatements[i]); err != nil {
-			d.Close()
-			return nil, &errorval{s: "could not set up database schema", e: err}
-		}
-	}
-	m := &mapper.Map{Database: d}
-	if err = m.Extend(queryStatements); err != nil {
-		m.Close()
-		return nil, &errorval{s: "could not set up database schema", e: err}
-	}
-	return &Watcher{
-		sql:     m,
-		bot:     b,
-		log:     l,
-		tick:    time.NewTicker(c.Timeouts.Resolve),
-		twitter: t,
-		backoff: c.Timeouts.Backoff,
-		allowed: c.Allowed,
-		blocked: c.Blocked,
-	}, nil
-}
-
-// RunContext will start the main Watcher process and all associated threads. This function will block until
-// the context is cancled or an interrupt signal is received. This function returns any errors that occur during
-// shutdown.
-func (w *Watcher) RunContext(ctx context.Context) error {
 	r, err := w.bot.GetUpdatesChan(telegram.UpdateConfig{})
 	if err != nil {
 		w.sql.Close()
-		return &errorval{s: "could not get Telegram receiver", e: err}
+		return &errval{s: "could not get Telegram receiver", e: err}
 	}
 	var (
 		c = make(chan uint8, 8)
@@ -148,7 +70,7 @@ func (w *Watcher) RunContext(ctx context.Context) error {
 		g sync.WaitGroup
 	)
 	signal.Notify(s, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-	x, w.cancel = context.WithCancel(ctx)
+	x, w.cancel = context.WithCancel(context.Background())
 	w.log.Info("Twitter Watcher Telegram Bot Started, spinning up threads...")
 	go w.threadSend(x, &g, m, t)
 	go w.threadTwitter(x, &g, c, t)
@@ -172,4 +94,86 @@ cleanup:
 	close(m)
 	close(t)
 	return w.sql.Close()
+}
+
+// New returns a new Watcher instance based on the passed config file path. This function will preform any
+// setup steps needed to start the Watcher. Once complete, use the 'Start' function to actually start the Watcher.
+func New(s string) (*Watcher, error) {
+	return NewOptions(s, false)
+}
+
+// NewOptions returns a new Watcher instance based on the passed config file path. This function will preform any
+// setup steps needed to start the Watcher. Once complete, use the 'Start' function to actually start the Watcher.
+// This function allows for specifying the option to clear the database before starting.
+func NewOptions(s string, empty bool) (*Watcher, error) {
+	var c config
+	j, err := ioutil.ReadFile(s)
+	if err != nil {
+		return nil, &errval{s: `error reading config file "` + s + `"`, e: err}
+	}
+	if err := json.Unmarshal(j, &c); err != nil {
+		return nil, &errval{s: `error parsing config file "` + s + `"`, e: err}
+	}
+	if err = c.check(); err != nil {
+		return nil, err
+	}
+	l := logx.Multiple(logx.Console(logx.Level(c.Log.Level)))
+	if len(c.Log.File) > 0 {
+		f, err := logx.File(c.Log.File, logx.Append, logx.Level(c.Log.Level))
+		if err != nil {
+			return nil, &errval{s: `error setting up log file "` + c.Log.File + `"`, e: err}
+		}
+		l.Add(f)
+	}
+	t := twitter.NewClient(
+		oauth1.NewConfig(c.Twitter.ConsumerKey, c.Twitter.ConsumerSecret).Client(
+			context.Background(), oauth1.NewToken(c.Twitter.AccessKey, c.Twitter.AccessSecret),
+		),
+	)
+	if _, _, err := t.Accounts.VerifyCredentials(nil); err != nil {
+		return nil, &errval{s: "login to Twitter failed", e: err}
+	}
+	b, err := telegram.NewBotAPI(c.Telegram)
+	if err != nil {
+		return nil, &errval{s: "login to Telegram failed", e: err}
+	}
+	d, err := sql.Open(
+		"mysql",
+		c.Database.Username+":"+c.Database.Password+"@"+c.Database.Server+"/"+c.Database.Name+"?multiStatements=true&interpolateParams=true",
+	)
+	if err != nil {
+		return nil, &errval{s: `database connection "` + c.Database.Server + `" failed`, e: err}
+	}
+	if err = d.Ping(); err != nil {
+		return nil, &errval{s: `database connection "` + c.Database.Server + `" failed`, e: err}
+	}
+	if d.SetConnMaxLifetime(c.Timeouts.Database); empty {
+		for i := range cleanStatements {
+			if _, err := d.Exec(cleanStatements[i]); err != nil {
+				d.Close()
+				return nil, &errval{s: "could not clean up database schema", e: err}
+			}
+		}
+	}
+	for i := range setupStatements {
+		if _, err := d.Exec(setupStatements[i]); err != nil {
+			d.Close()
+			return nil, &errval{s: "could not set up database schema", e: err}
+		}
+	}
+	m := &mapper.Map{Database: d}
+	if err = m.Extend(queryStatements); err != nil {
+		m.Close()
+		return nil, &errval{s: "could not set up database schema", e: err}
+	}
+	return &Watcher{
+		sql:     m,
+		bot:     b,
+		log:     l,
+		tick:    time.NewTicker(c.Timeouts.Resolve),
+		twitter: t,
+		backoff: c.Timeouts.Backoff,
+		allowed: c.Allowed,
+		blocked: c.Blocked,
+	}, nil
 }
