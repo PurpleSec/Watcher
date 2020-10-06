@@ -24,10 +24,10 @@ The default config can be dumped to Stdout using the '-d' command line flag.
 ```[json]
 {
     "db": {
-        "host": "",
-        "user": "",
-        "password": "",
-        "database": ""
+        "host": "tcp(localhost:3306)",
+        "user": "watcher_user",
+        "password": "password",
+        "database": "watcher_db"
     },
     "log": {
         "file": "watcher.log",
