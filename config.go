@@ -29,10 +29,10 @@ import (
 // Defaults is a string representation of a JSON formatted default configuration for a Watcher instance.
 const Defaults = `{
 	"db": {
-		"host": "",
-		"user": "",
-		"password": "",
-		"database": ""
+		"host": "tcp(localhost:3306)",
+		"user": "watcher_user",
+		"password": "password",
+		"database": "watcher_db"
 	},
 	"log": {
 		"file": "watcher.log",
@@ -59,19 +59,21 @@ const (
 	success = `Awesome! Your following list was updated!`
 	cleared = `Awesome! I have cleared your following list!`
 	denied  = `I'm sorry but my permissions do not allow you to use this service.`
-	errmsg  = `I'm sorry, There seems to have been an error trying to process your request
+)
+const errmsg = `I'm sorry, There seems to have been an error trying to process your request
 Please try again later.`
-	invalid = `I'm sorry I don't understand that command.
+
+const invalid = `I'm sorry I don't understand that command.
 
 Please use a command from the following list:
 /list
 /clear
 /add <@username1,@usernameN,..>
 /remove <@username1,@usernameN,..|clear|all>`
-	badname = `" is not a valid Twitter username!
+
+const badname = `" is not a valid Twitter username!
 
 Twitter names must start with "@" and contain no special characters or spaces.`
-)
 
 type log struct {
 	File  string `json:"file"`
@@ -89,7 +91,6 @@ type errval struct {
 }
 type config struct {
 	Log      log      `json:"log"`
-	Clear    bool     `json:"-"`
 	Twitter  auth     `json:"twitter"`
 	Blocked  []string `json:"blocked"`
 	Allowed  []string `json:"allowed"`

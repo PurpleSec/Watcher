@@ -45,7 +45,7 @@ var setupStatements = []string{
 		FOREIGN KEY(SubUser) REFERENCES Users(UserID),
 		FOREIGN KEY(SubMap) REFERENCES Mappings(MapID)
 	)`,
-	`CREATE FUNCTION IF NOT EXISTS GetUserID(ChatID INT(64)) RETURNS INT(64) NOT DETERMINISTIC
+	`CREATE FUNCTION IF NOT EXISTS GetUserID(ChatID BIGINT(64)) RETURNS BIGINT(64) NOT DETERMINISTIC
 	BEGIN
 		SET @uid = COALESCE((SELECT UserID FROM Users WHERE UserChat = ChatID LIMIT 1), 0);
 		IF @uid > 0 THEN
@@ -62,13 +62,13 @@ var setupStatements = []string{
 		COMMIT;
 		SELECT (SELECT COUNT(MapID) FROM Mappings) As MapCount, MapID, MapName, MapTwitter FROM Mappings;
 	END;`,
-	`CREATE PROCEDURE IF NOT EXISTS GetSubscription(ChatID INT(64))
+	`CREATE PROCEDURE IF NOT EXISTS GetSubscription(ChatID BIGINT(64))
 	BEGIN
 		SELECT M.MapName FROM Mappings M
 			INNER JOIN Subscribers S ON M.MapID = S.SubMap
 		WHERE S.SubUser = (SELECT GetUserID(ChatID));
 	END;`,
-	`CREATE PROCEDURE IF NOT EXISTS RemoveAllSubscriptions(ChatID INT(64))
+	`CREATE PROCEDURE IF NOT EXISTS RemoveAllSubscriptions(ChatID BIGINT(64))
 	BEGIN
 		SET @uid = (SELECT GetUserID(ChatID));
 		START TRANSACTION;
@@ -76,7 +76,7 @@ var setupStatements = []string{
 		DELETE FROM Mappings WHERE (SELECT COUNT(SubID) FROM Subscribers WHERE SubMap = MapID) = 0;
 		COMMIT;
 	END;`,
-	`CREATE PROCEDURE IF NOT EXISTS AddSubscription(ChatID INT(64), Name VARCHAR(20))
+	`CREATE PROCEDURE IF NOT EXISTS AddSubscription(ChatID BIGINT(64), Name VARCHAR(20))
 	BEGIN
 		SET @uid = (SELECT GetUserID(ChatID));
 		SET @exists = COALESCE(
@@ -96,7 +96,7 @@ var setupStatements = []string{
 		COMMIT;
 		SELECT MapTwitter FROM Mappings WHERE MapID = @mid;
 	END;`,
-	`CREATE PROCEDURE IF NOT EXISTS RemoveSubscription(ChatID INT(64), Name VARCHAR(20))
+	`CREATE PROCEDURE IF NOT EXISTS RemoveSubscription(ChatID BIGINT(64), Name VARCHAR(20))
 	BEGIN
 		SET @uid = (SELECT GetUserID(ChatID));
 		SET @exists = COALESCE(

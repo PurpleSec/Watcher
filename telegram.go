@@ -115,12 +115,12 @@ func (w *Watcher) list(x context.Context, i int64) string {
 		b.WriteString("- @" + s + "\n")
 		c++
 	}
-	if r.Close(); c == 0 {
-		return "There are currently no users that I am following for you."
-	}
+	r.Close()
 	s = b.String()
 	b.Reset()
-	builders.Put(b)
+	if builders.Put(b); c == 0 {
+		return "There are currently no users that I am following for you."
+	}
 	return s
 }
 func (w *Watcher) tweet(x context.Context, m chan<- message, t *twitter.Tweet) {
@@ -147,7 +147,7 @@ func (w *Watcher) tweet(x context.Context, m chan<- message, t *twitter.Tweet) {
 	r.Close()
 }
 func (w *Watcher) message(x context.Context, n *telegram.Message, c chan<- uint8) string {
-	if !canUseACL(n.From.UserName, w.allowed, w.blocked) {
+	if !canUseACL(n.From.String(), w.allowed, w.blocked) {
 		return denied
 	}
 	if len(n.Text) < 5 || n.Text[0] != '/' {
@@ -265,7 +265,7 @@ func (w *Watcher) threadReceive(x context.Context, g *sync.WaitGroup, m chan<- m
 			if n.Message == nil || n.Message.Chat == nil {
 				break
 			}
-			w.log.Trace("Received Telegram message from %s: %d...", n.Message.Chat.UserName, n.Message.Chat.ID)
+			w.log.Trace("Received Telegram message from %s: %d...", n.Message.From.String(), n.Message.Chat.ID)
 			m <- message{tries: 2, msg: telegram.NewMessage(n.Message.Chat.ID, w.message(x, n.Message, c))}
 		case <-x.Done():
 			w.log.Debug("Stopping Telegram receiver thread.")
