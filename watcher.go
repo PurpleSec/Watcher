@@ -88,6 +88,7 @@ func (w *Watcher) Run() error {
 cleanup:
 	w.cancel()
 	w.tick.Stop()
+	w.bot.StopReceivingUpdates()
 	g.Wait()
 	close(c)
 	close(s)
