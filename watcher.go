@@ -86,6 +86,7 @@ func (w *Watcher) Run() error {
 		}
 	}
 cleanup:
+	signal.Stop(s)
 	w.cancel()
 	w.tick.Stop()
 	w.bot.StopReceivingUpdates()
