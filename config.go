@@ -56,24 +56,19 @@ const Defaults = `{
 `
 
 const (
+	errmsg = `I'm sorry, There seems to have been an error trying to process your request
+
+Please try again later.`
 	success = `Awesome! Your following list was updated!`
 	cleared = `Awesome! I have cleared your following list!`
-	denied  = `I'm sorry but my permissions do not allow you to use this service.`
-)
-const errmsg = `I'm sorry, There seems to have been an error trying to process your request
-Please try again later.`
-
-const invalid = `I'm sorry I don't understand that command.
+	invalid = `I'm sorry I don't understand that command.
 
 Please use a command from the following list:
 /list
 /clear
 /add <@username1,@usernameN,..>
 /remove <@username1,@usernameN,..|clear|all>`
-
-const badname = `" is not a valid Twitter username!
-
-Twitter names must start with "@" and contain no special characters or spaces.`
+)
 
 type log struct {
 	File  string `json:"file"`
@@ -97,11 +92,6 @@ type config struct {
 	Timeouts timeouts `json:"timeouts"`
 	Telegram string   `json:"telegram_key"`
 	Database database `json:"db"`
-}
-type resolve struct {
-	ID   int64
-	TID  int64
-	Name string
 }
 type timeouts struct {
 	Resolve  time.Duration `json:"resolver"`

@@ -19,9 +19,8 @@ package watcher
 var cleanStatements = []string{
 	`DROP TABLES IF EXISTS Subscribers`,
 	`DROP TABLES IF EXISTS Mappings`,
-	`DROP TABLES IF EXISTS Users`,
-	`DROP FUNCTION IF EXISTS GetUserID`,
-	`DROP PROCEDURE IF EXISTS GetSubscription`,
+	`DROP PROCEDURE IF EXISTS UpdateMapping`,
+	`DROP PROCEDURE IF EXISTS CleanupRoutine`,
 	`DROP PROCEDURE IF EXISTS AddSubscription`,
 	`DROP PROCEDURE IF EXISTS RemoveSubscription`,
 	`DROP PROCEDURE IF EXISTS GetAllSubscriptions`,
@@ -29,102 +28,110 @@ var cleanStatements = []string{
 }
 
 var setupStatements = []string{
-	`CREATE TABLE IF NOT EXISTS Users(
-		UserID BIGINT(64) NOT NULL PRIMARY KEY AUTO_INCREMENT,
-		UserChat BIGINT(64) NOT NULL
-	)`,
 	`CREATE TABLE IF NOT EXISTS Mappings(
-		MapID BIGINT(64) NOT NULL PRIMARY KEY AUTO_INCREMENT,
-		MapName VARCHAR(20) NOT NULL UNIQUE,
-		MapTwitter BIGINT(64) NOT NULL DEFAULT 0
+		ID BIGINT(64) NOT NULL PRIMARY KEY AUTO_INCREMENT,
+		Name VARCHAR(20) NOT NULL UNIQUE,
+		Twitter BIGINT(64) NOT NULL DEFAULT 0
 	)`,
 	`CREATE TABLE IF NOT EXISTS Subscribers(
-		SubID BIGINT(64) NOT NULL PRIMARY KEY AUTO_INCREMENT,
-		SubMap BIGINT(64) NOT NULL,
-		SubUser BIGINT(64) NOT NULL,
-		FOREIGN KEY(SubUser) REFERENCES Users(UserID),
-		FOREIGN KEY(SubMap) REFERENCES Mappings(MapID)
+		ID BIGINT(64) NOT NULL PRIMARY KEY AUTO_INCREMENT,
+		Chat BIGINT(64) NOT NULL,
+		Mapping BIGINT(64) NOT NULL,
+		FOREIGN KEY(Mapping) REFERENCES Mappings(ID)
 	)`,
-	`CREATE FUNCTION IF NOT EXISTS GetUserID(ChatID BIGINT(64)) RETURNS BIGINT(64) NOT DETERMINISTIC
+	`CREATE PROCEDURE IF NOT EXISTS CleanupRoutine()
 	BEGIN
-		SET @uid = COALESCE((SELECT UserID FROM Users WHERE UserChat = ChatID LIMIT 1), 0);
-		IF @uid > 0 THEN
-			RETURN @uid;
-		ELSE
-			INSERT INTO Users(UserChat) VALUES(ChatID);
-			RETURN (SELECT UserID FROM Users WHERE UserChat = ChatID LIMIT 1);
-		END IF;
+		START TRANSACTION;
+			DELETE FROM Subscribers WHERE ID In (
+				SELECT * FROM (
+					SELECT S.ID FROM Subscribers S WHERE
+						(SELECT COUNT(X.ID) FROM Subscribers X WHERE X.Chat = S.Chat AND X.Mapping = S.Mapping) > 1 AND
+						(SELECT MIN(Y.ID) FROM Subscribers Y WHERE Y.Chat = S.Chat AND Y.Mapping = S.Mapping) <> S.ID
+				) As Duplicates
+			);
+			DELETE FROM Mappings WHERE (SELECT COUNT(S.ID) FROM Subscribers S WHERE S.Mapping = ID) = 0;
+		COMMIT;
 	END;`,
 	`CREATE PROCEDURE IF NOT EXISTS GetAllSubscriptions()
 	BEGIN
-		START TRANSACTION;
-		DELETE FROM Mappings WHERE (SELECT COUNT(SubID) FROM Subscribers WHERE SubMap = MapID) = 0;
-		COMMIT;
-		SELECT (SELECT COUNT(MapID) FROM Mappings) As MapCount, MapID, MapName, MapTwitter FROM Mappings;
-	END;`,
-	`CREATE PROCEDURE IF NOT EXISTS GetSubscription(ChatID BIGINT(64))
-	BEGIN
-		SELECT M.MapName FROM Mappings M
-			INNER JOIN Subscribers S ON M.MapID = S.SubMap
-		WHERE S.SubUser = (SELECT GetUserID(ChatID));
+		CALL CleanupRoutine();
+		SELECT (SELECT COUNT(ID) FROM Mappings) As Amount, ID, Name, Twitter FROM Mappings;
 	END;`,
 	`CREATE PROCEDURE IF NOT EXISTS RemoveAllSubscriptions(ChatID BIGINT(64))
 	BEGIN
-		SET @uid = (SELECT GetUserID(ChatID));
 		START TRANSACTION;
-		DELETE FROM Subscribers WHERE SubUser = @uid;
-		DELETE FROM Mappings WHERE (SELECT COUNT(SubID) FROM Subscribers WHERE SubMap = MapID) = 0;
+			DELETE FROM Subscribers WHERE Chat = ChatID;
+			CALL CleanupRoutine();
 		COMMIT;
 	END;`,
 	`CREATE PROCEDURE IF NOT EXISTS AddSubscription(ChatID BIGINT(64), Name VARCHAR(20))
 	BEGIN
-		SET @uid = (SELECT GetUserID(ChatID));
 		SET @exists = COALESCE(
-			(SELECT M.MapID FROM Mappings M
-				INNER JOIN Subscribers S ON M.MapID = S.SubMap
-			WHERE S.SubUser = @uid AND M.MapName = Name), 0
+			(SELECT M.ID FROM Mappings M INNER JOIN Subscribers S ON S.Mapping = M.ID WHERE M.Name = Name AND S.Chat = ChatID LIMIT 1), 0
 		);
-		START TRANSACTION;
-		SET @mid = COALESCE((SELECT MapID FROM Mappings WHERE MapName = Name LIMIT 1), 0);
-		IF @mid = 0 THEN
-			INSERT INTO Mappings(MapName) VALUES(Name);
-			SET @mid = (SELECT MapID FROM Mappings WHERE MapName = Name LIMIT 1);
-		END IF;
 		IF @exists = 0 THEN
-			INSERT INTO Subscribers(SubMap, SubUser) VALUES(@mid, @uid);
+			SET @mid = COALESCE((SELECT M.ID FROM Mappings M WHERE M.Name = Name LIMIT 1), 0);
+			START TRANSACTION;
+				IF @mid = 0 THEN
+					INSERT INTO Mappings(Name) VALUES(Name);
+					SET @mid = (SELECT M.ID FROM Mappings M WHERE M.Name = Name LIMIT 1);
+				END IF;
+				INSERT INTO Subscribers(Mapping, Chat) VALUES(@mid, ChatID);
+			COMMIT;
 		END IF;
-		COMMIT;
-		SELECT MapTwitter FROM Mappings WHERE MapID = @mid;
+		SELECT M.Twitter FROM Mappings M WHERE M.ID = @mid;
 	END;`,
 	`CREATE PROCEDURE IF NOT EXISTS RemoveSubscription(ChatID BIGINT(64), Name VARCHAR(20))
 	BEGIN
-		SET @uid = (SELECT GetUserID(ChatID));
-		SET @exists = COALESCE(
-			(SELECT M.MapID FROM Mappings M
-				INNER JOIN Subscribers S ON M.MapID = S.SubMap
-			WHERE S.SubUser = @uid AND M.MapName = Name LIMIT 1), 0
+		SET @mid = COALESCE(
+			(SELECT M.ID FROM Mappings M INNER JOIN Subscribers S ON S.Mapping = M.ID WHERE M.Name = Name AND S.Chat = ChatID LIMIT 1), 0
 		);
-		START TRANSACTION;
-		SET @mid = COALESCE((SELECT MapID FROM Mappings WHERE MapName = Name LIMIT 1), 0);
 		IF @mid > 0 THEN
-			DELETE FROM Subscribers WHERE SubMap = @mid AND SubUser = @uid;
+			START TRANSACTION;
+				DELETE FROM Subscribers WHERE Mapping = @mid AND Chat = ChatID;
+			COMMIT;
+			SET @mid_count = COALESCE((SELECT COUNT(S.Mapping) FROM Subscribers S WHERE S.Mapping = @mid), 0);
+			IF @mid_count > 0 THEN
+				START TRANSACTION;
+					DELETE FROM Mappings WHERE ID = @mid;
+				COMMIT;
+			END IF;
 		END IF;
-		SET @map_num = COALESCE((SELECT COUNT(SubMap) FROM Subscribers WHERE SubMap = @mid), 0);
-		IF @map_num = 0 THEN
-			DELETE FROM Mappings WHERE MapID = @mid;
+	END;`,
+	`CREATE PROCEDURE IF NOT EXISTS UpdateMapping(MapID BIGINT(64), TwitterID BIGINT(64), Name VARCHAR(20))
+	BEGIN
+		SET @count = COALESCE((SELECT COUNT(M.ID) FROM Mappings M WHERE M.Twitter = TwitterID), 0);
+		SET @exists = COALESCE((SELECT M.ID FROM Mappings M WHERE M.ID = MapID AND M.Name = Name LIMIT 1), 0);
+		IF @exists = 0 THEN
+			IF @count > 1 THEN
+				START TRANSACTION;
+					INSERT INTO Mappings(Name, Twitter) VALUES(CONCAT("!", Name), TwitterID);
+					SET @mid = (SELECT M.ID FROM Mappings M WHERE M.Twitter = TwitterID AND M.Name = CONCAT("!", Name) LIMIT 1);
+					UPDATE Subscribers S INNER JOIN Mappings M ON M.ID = S.Mapping SET S.Mapping = @mid WHERE M.Twitter = TwitterID;
+					DELETE FROM Mappings WHERE Twitter = TwitterID AND ID != @mid;
+					UPDATE Mappings SET Name = Name WHERE ID = @mid;
+				COMMIT;
+			ELSE
+				START TRANSACTION;
+					UPDATE Mappings M SET M.Twitter = TwitterID, M.Name = Name WHERE M.ID = MapID;
+				COMMIT;
+			END IF;
+		ELSE
+			START TRANSACTION;
+				UPDATE Mappings M SET M.Twitter = TwitterID, M.Name = Name WHERE M.ID = MapID;
+			COMMIT;
 		END IF;
-		COMMIT;
+		CALL CleanupRoutine();
 	END;`,
 }
 
 var queryStatements = map[string]string{
-	"get":      `CALL GetSubscription(?)`,
 	"add":      `CALL AddSubscription(?, ?)`,
 	"del":      `CALL RemoveSubscription(?, ?)`,
-	"set":      `UPDATE Mappings SET MapTwitter = ? WHERE MapID = ?`,
+	"set":      `CALL UpdateMapping(?, ?, ?)`,
+	"list":     `SELECT M.Name, M.Twitter FROM Mappings M INNER JOIN Subscribers S ON S.Mapping = M.ID WHERE S.Chat = ?`,
+	"notify":   `SELECT S.Chat FROM Subscribers S INNER JOIN Mappings M ON M.ID = S.Mapping WHERE M.Twitter = ?`,
 	"del_all":  `CALL RemoveAllSubscriptions(?)`,
 	"get_all":  `CALL GetAllSubscriptions()`,
-	"get_list": `SELECT (SELECT COUNT(MapID) FROM Mappings) As MapCount, MapTwitter FROM Mappings`,
-	"get_notify": `SELECT U.UserChat FROM Users U INNER JOIN Subscribers S ON S.SubUser = U.UserID
-					INNER JOIN Mappings M ON M.MapID = S.SubMap WHERE M.MapTwitter = ?`,
+	"get_list": `SELECT (SELECT COUNT(ID) FROM Mappings) As Count, Twitter FROM Mappings`,
 }

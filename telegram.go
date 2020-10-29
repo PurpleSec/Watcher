@@ -35,19 +35,19 @@ var builders = sync.Pool{
 
 func split(s string) ([]string, string) {
 	var (
-		v bool
-		n = strings.Split(s, ",")
+		n  = strings.Split(s, ",")
+		ok bool
 	)
 	for i := range n {
-		if n[i], v = validTwitter(n[i]); !v {
-			return nil, `The username "` + n[i] + badname
+		if n[i], ok = validTwitter(n[i]); !ok {
+			return nil, `The username "` + n[i] + `" is not a valid Twitter username!` + "\n\nTwitter names must start with \"@\" and contain no special characters or spaces."
 		}
 	}
 	return n, ""
 }
 func validTwitter(s string) (string, bool) {
 	v := strings.TrimSpace(s)
-	if len(v) == 0 || v[0] != '@' {
+	if len(v) == 0 || v[0] != '@' || len(v) > 16 {
 		return v, false
 	}
 	v = v[1:]
@@ -94,25 +94,30 @@ func (w *Watcher) clear(x context.Context, i int64) bool {
 	return true
 }
 func (w *Watcher) list(x context.Context, i int64) string {
-	r, err := w.sql.QueryContext(x, "get", i)
+	r, err := w.sql.QueryContext(x, "list", i)
 	if err != nil {
 		w.log.Error("Error getting Twitter subscription list from database: %s!", err.Error())
 		return errmsg
 	}
 	var (
 		c int
+		t int64
 		s string
 		b = builders.Get().(*strings.Builder)
 	)
 	for b.WriteString("I am currently following these users:\n"); r.Next(); {
-		if err := r.Scan(&s); err != nil {
+		if err := r.Scan(&s, &t); err != nil {
 			w.log.Error("Error scanning data into Twitter subscriptions list from database: %s!", err.Error())
 			continue
 		}
 		if len(s) == 0 {
 			continue
 		}
-		b.WriteString("- @" + s + "\n")
+		b.WriteString("- @" + s)
+		if t == 0 {
+			b.WriteString(" (Might not be valid!)")
+		}
+		b.WriteByte('\n')
 		c++
 	}
 	r.Close()
@@ -124,7 +129,7 @@ func (w *Watcher) list(x context.Context, i int64) string {
 	return s
 }
 func (w *Watcher) tweet(x context.Context, m chan<- message, t *twitter.Tweet) {
-	r, err := w.sql.QueryContext(x, "get_notify", t.User.ID)
+	r, err := w.sql.QueryContext(x, "notify", t.User.ID)
 	if err != nil {
 		w.log.Error("Error getting Twitter subscriptions from database: %s!", err.Error())
 		return
@@ -148,7 +153,7 @@ func (w *Watcher) tweet(x context.Context, m chan<- message, t *twitter.Tweet) {
 }
 func (w *Watcher) message(x context.Context, n *telegram.Message, c chan<- uint8) string {
 	if !canUseACL(n.From.String(), w.allowed, w.blocked) {
-		return denied
+		return `I'm sorry but my permissions do not allow you to use this service.`
 	}
 	if len(n.Text) < 5 || n.Text[0] != '/' {
 		return invalid
@@ -229,7 +234,7 @@ func (w *Watcher) action(x context.Context, i int64, s string, a bool, c chan<- 
 	}
 	return success
 }
-func (w *Watcher) threadSend(x context.Context, g *sync.WaitGroup, m chan message, t <-chan *twitter.Tweet) {
+func (w *Watcher) send(x context.Context, g *sync.WaitGroup, m chan message, t <-chan *twitter.Tweet) {
 	w.log.Debug("Starting Telegram sender thread...")
 	for g.Add(1); ; {
 		select {
@@ -257,7 +262,7 @@ func (w *Watcher) threadSend(x context.Context, g *sync.WaitGroup, m chan messag
 		}
 	}
 }
-func (w *Watcher) threadReceive(x context.Context, g *sync.WaitGroup, m chan<- message, r <-chan telegram.Update, c chan<- uint8) {
+func (w *Watcher) receive(x context.Context, g *sync.WaitGroup, m chan<- message, r <-chan telegram.Update, c chan<- uint8) {
 	w.log.Debug("Starting Telegram receiver thread...")
 	for g.Add(1); ; {
 		select {

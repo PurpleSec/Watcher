@@ -62,7 +62,7 @@ func (w *Watcher) Run() error {
 		return &errval{s: "could not get Telegram receiver", e: err}
 	}
 	var (
-		c = make(chan uint8, 8)
+		c = make(chan uint8, 64)
 		s = make(chan os.Signal, 1)
 		m = make(chan message, 256)
 		t = make(chan *twitter.Tweet, 256)
@@ -72,9 +72,9 @@ func (w *Watcher) Run() error {
 	signal.Notify(s, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	x, w.cancel = context.WithCancel(context.Background())
 	w.log.Info("Twitter Watcher Telegram Bot Started, spinning up threads...")
-	go w.threadSend(x, &g, m, t)
-	go w.threadTwitter(x, &g, c, t)
-	go w.threadReceive(x, &g, m, r, c)
+	go w.send(x, &g, m, t)
+	go w.watch(x, &g, c, t)
+	go w.receive(x, &g, m, r, c)
 	for {
 		select {
 		case <-s:
@@ -149,21 +149,17 @@ func NewOptions(s string, empty bool) (*Watcher, error) {
 	if err = d.Ping(); err != nil {
 		return nil, &errval{s: `database connection "` + c.Database.Server + `" failed`, e: err}
 	}
+	m := mapper.New(d)
 	if d.SetConnMaxLifetime(c.Timeouts.Database); empty {
-		for i := range cleanStatements {
-			if _, err := d.Exec(cleanStatements[i]); err != nil {
-				d.Close()
-				return nil, &errval{s: "could not clean up database schema", e: err}
-			}
+		if err = m.Batch(cleanStatements); err != nil {
+			m.Close()
+			return nil, &errval{s: "could not clean up database schema", e: err}
 		}
 	}
-	for i := range setupStatements {
-		if _, err := d.Exec(setupStatements[i]); err != nil {
-			d.Close()
-			return nil, &errval{s: "could not set up database schema", e: err}
-		}
+	if err = m.Batch(setupStatements); err != nil {
+		m.Close()
+		return nil, &errval{s: "could not set up database schema", e: err}
 	}
-	m := &mapper.Map{Database: d}
 	if err = m.Extend(queryStatements); err != nil {
 		m.Close()
 		return nil, &errval{s: "could not set up database schema", e: err}

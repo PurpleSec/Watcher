@@ -26,7 +26,14 @@ import (
 	"github.com/dghubble/go-twitter/twitter"
 )
 
-const drop = time.Second * 15
+const drop = time.Minute
+
+type mapping struct {
+	ID      int64
+	New     string
+	Name    string
+	Twitter int64
+}
 
 func (w *Watcher) resolve(x context.Context, a bool) {
 	w.log.Debug("Starting Twitter ID mapping resolve task...")
@@ -36,54 +43,72 @@ func (w *Watcher) resolve(x context.Context, a bool) {
 		return
 	}
 	var (
-		l    = make([]resolve, 0, 64)
-		s    string
-		c    int
-		i, m int64
+		l       = make([]*mapping, 0, 64)
+		s       string
+		t, m, u int64
 	)
 	for r.Next() {
-		if err := r.Scan(&c, &i, &s, &m); err != nil {
+		if err = r.Scan(&t, &m, &s, &u); err != nil {
 			w.log.Error("Error scanning data into Twitter mappings from database: %s!", err.Error())
 			continue
 		}
-		if !a && m != 0 || len(s) == 0 || c == 0 {
+		if !a && u != 0 || len(s) == 0 {
 			continue
 		}
-		if cap(l) < c {
-			l = append(make([]resolve, 0, c-cap(l)), l...)
+		if cap(l) < int(t) {
+			l = append(make([]*mapping, 0, int(t)-cap(l)), l...)
 		}
-		l = append(l, resolve{ID: i, TID: m, Name: s})
+		l = append(l, &mapping{ID: m, Name: s, Twitter: u})
 	}
 	if r.Close(); len(l) == 0 {
 		w.log.Trace("Twitter resolve mapping is empty, not attempting to resolve...")
 		return
 	}
+	var (
+		i = make(map[int64]string, len(l))
+		n []string
+		q []twitter.User
+	)
 	w.log.Debug("Twitter mapping generated, attempting to resolve to %d user IDs...", len(l))
-	for o, i, z := make([]string, 0, 100), 0, 0; i < len(l); i += 100 {
-		if z = i + 100; z > len(l) {
+	for x, z := 0, 0; x < len(l); x += 50 {
+		if z = x + 100; z > len(l) {
 			z = len(l)
 		}
-		for _, v := range l[i:z] {
-			o = append(o, v.Name)
+		n = make([]string, 0, z-x)
+		for _, v := range l[x:z] {
+			n = append(n, v.Name)
 		}
-		u, _, err := w.twitter.Users.Lookup(&twitter.UserLookupParams{ScreenName: o, IncludeEntities: twitter.Bool(false)})
-		if err != nil {
+		if q, _, err = w.twitter.Users.Lookup(&twitter.UserLookupParams{ScreenName: n}); err != nil {
 			w.log.Error("Error retriving data about Twitter mappings from Twitter: %s!", err.Error())
 			continue
 		}
-		for x := range u {
-			for v := range l[i:z] {
-				if stringLowMatch(u[x].ScreenName, l[v].Name) {
-					w.log.Trace("Twitter username %q was resolved to ID %q...", u[x].ScreenName, u[x].IDStr)
-					l[v].TID = u[x].ID
-					break
-				}
+		for v := range q {
+			_, ok := i[q[v].ID]
+			if ok {
+				w.log.Warning("Duplicate ID value %q detected with username %q!", q[v].IDStr, q[v].ScreenName)
+			}
+			i[q[v].ID] = q[v].ScreenName
+		}
+	}
+	for k, v := range i {
+		for x := range l {
+			if stringLowMatch(v, l[x].Name) {
+				l[x].Twitter = k
+				w.log.Trace(`Twitter username %q (db: %s) was resolved to ID "%d"...`, v, l[x].Name, k)
+			} else if l[x].Twitter == k && !stringLowMatch(v, l[x].Name) {
+				l[x].New = v
+				w.log.Warning(`Found new name for ID "%d": %s => %s!`, k, l[x].Name, l[x].New)
 			}
 		}
 	}
-	for i := range l {
-		if _, err := w.sql.Exec("set", l[i].TID, l[i].ID); err != nil {
-			w.log.Error("Error update Twitter mappings in the database: %s!", err.Error())
+	for x := range l {
+		if len(l[x].New) > 0 {
+			_, err = w.sql.Exec("set", l[x].ID, uint64(l[x].Twitter), l[x].New)
+		} else {
+			_, err = w.sql.Exec("set", l[x].ID, uint64(l[x].Twitter), l[x].Name)
+		}
+		if err != nil {
+			w.log.Error("Error updating Twitter mappings in the database: %s!", err.Error())
 			continue
 		}
 	}
@@ -123,7 +148,7 @@ func (w *Watcher) stream(x context.Context, f bool, a bool) *twitter.StreamFilte
 	w.log.Debug("Twitter watch list generated, subscribing to %d users...", len(l))
 	return &twitter.StreamFilterParams{Follow: l, Language: []string{"en"}, StallWarnings: twitter.Bool(true)}
 }
-func (w *Watcher) threadTwitter(x context.Context, g *sync.WaitGroup, c chan uint8, o chan<- *twitter.Tweet) {
+func (w *Watcher) watch(x context.Context, g *sync.WaitGroup, c chan uint8, o chan<- *twitter.Tweet) {
 	var (
 		z   = make(chan interface{})
 		y   = time.NewTicker(drop)
@@ -138,6 +163,8 @@ func (w *Watcher) threadTwitter(x context.Context, g *sync.WaitGroup, c chan uin
 		if s, err = w.twitter.Streams.Filter(l); err != nil {
 			w.log.Error("Error creating initial Twitter stream: %s!", err.Error())
 			w.cancel()
+			y.Stop()
+			close(z)
 			return
 		}
 		r = s.Messages
@@ -175,10 +202,20 @@ func (w *Watcher) threadTwitter(x context.Context, g *sync.WaitGroup, c chan uin
 			case *twitter.StreamDisconnect:
 				w.log.Error("Twitter stream thread received a StreamDisconnect message: %s!", t.Reason)
 				c <- 0
+				if y.Stop(); s != nil {
+					s.Stop()
+				}
+				close(z)
+				g.Done()
 				return
 			case *url.Error:
 				w.log.Error("Twitter stream thread received an error: %s!", t.Error())
 				c <- 0
+				if y.Stop(); s != nil {
+					s.Stop()
+				}
+				close(z)
+				g.Done()
 				return
 			default:
 				if t != nil {
@@ -202,6 +239,9 @@ func (w *Watcher) threadTwitter(x context.Context, g *sync.WaitGroup, c chan uin
 				if s, err = w.twitter.Streams.Filter(l); err != nil {
 					w.log.Error("Error creating initial Twitter stream: %s!", err.Error())
 					w.cancel()
+					y.Stop()
+					close(z)
+					g.Done()
 					return
 				}
 				r = s.Messages
@@ -212,11 +252,11 @@ func (w *Watcher) threadTwitter(x context.Context, g *sync.WaitGroup, c chan uin
 			w.log.Trace("Dropping all entries on the floor until next tick!")
 			d, i = true, -1
 		case <-x.Done():
-			close(z)
 			w.log.Debug("Stopping Twitter stream thread.")
 			if y.Stop(); s != nil {
 				s.Stop()
 			}
+			close(z)
 			g.Done()
 			return
 		}
