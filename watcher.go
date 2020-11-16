@@ -100,14 +100,8 @@ cleanup:
 
 // New returns a new Watcher instance based on the passed config file path. This function will preform any
 // setup steps needed to start the Watcher. Once complete, use the 'Run' function to actually start the Watcher.
-func New(s string) (*Watcher, error) {
-	return NewOptions(s, false)
-}
-
-// NewOptions returns a new Watcher instance based on the passed config file path. This function will preform any
-// setup steps needed to start the Watcher. Once complete, use the 'Run' function to actually start the Watcher.
 // This function allows for specifying the option to clear the database before starting.
-func NewOptions(s string, empty bool) (*Watcher, error) {
+func New(s string, empty bool) (*Watcher, error) {
 	var c config
 	j, err := ioutil.ReadFile(s)
 	if err != nil {

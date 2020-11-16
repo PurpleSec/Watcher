@@ -46,7 +46,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	w, err := watcher.NewOptions(file, empty)
+	w, err := watcher.New(file, empty)
 	if err != nil {
 		os.Stdout.WriteString("Error: " + err.Error() + "!\n")
 		os.Exit(1)

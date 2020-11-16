@@ -111,9 +111,6 @@ func (e errval) Error() string {
 	}
 	return e.s + ": " + e.e.Error()
 }
-func (e errval) Unwrap() error {
-	return e.e
-}
 func (c *config) check() error {
 	if len(c.Twitter.AccessKey) == 0 {
 		return &errval{s: "missing Twitter access key"}
