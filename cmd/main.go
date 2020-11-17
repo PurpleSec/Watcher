@@ -29,7 +29,7 @@ func main() {
 	}
 	args.StringVar(&file, "f", "", "Configuration file path.")
 	args.BoolVar(&dump, "d", false, "Dump the default configuration and exit.")
-	args.BoolVar(&empty, "c", false, "Clear the database of ALL DATA before starting up.")
+	args.BoolVar(&empty, "clear-all", false, "Clear the database of ALL DATA before starting up.")
 
 	if err := args.Parse(os.Args[1:]); err != nil {
 		os.Stderr.WriteString(usage)
