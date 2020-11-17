@@ -14,7 +14,7 @@ Usage:
   -h              Print this help menu.
   -f <file>       Configuration file path.
   -d              Dump the default configuration and exit.
-  -c              Clear the database of ALL DATA before starting up.
+  -clear-all      Clear the database of ALL DATA before starting up.
 `
 
 func main() {
