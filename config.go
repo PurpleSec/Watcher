@@ -59,8 +59,6 @@ const (
 	errmsg = `I'm sorry, There seems to have been an error trying to process your request
 
 Please try again later.`
-	success = `Awesome! Your following list was updated!`
-	cleared = `Awesome! I have cleared your following list!`
 	invalid = `I'm sorry I don't understand that command.
 
 Please use a command from the following list:

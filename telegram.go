@@ -33,6 +33,8 @@ var builders = sync.Pool{
 	},
 }
 
+var confirm struct{}
+
 func split(s string) ([]string, string) {
 	var (
 		n  = strings.Split(s, ",")
@@ -155,6 +157,14 @@ func (w *Watcher) message(x context.Context, n *telegram.Message, c chan<- uint8
 	if !canUseACL(n.From.String(), w.allowed, w.blocked) {
 		return `I'm sorry but my permissions do not allow you to use this service.`
 	}
+	_, ok := w.confirm[n.Chat.ID]
+	if delete(w.confirm, n.Chat.ID); ok && stringLowMatch(n.Text, "confirm") {
+		if r := w.clear(x, n.Chat.ID); !r {
+			return errmsg
+		}
+		c <- 0
+		return "Awesome! I have cleared your following list!"
+	}
 	if len(n.Text) < 5 || n.Text[0] != '/' {
 		return invalid
 	}
@@ -167,11 +177,8 @@ func (w *Watcher) message(x context.Context, n *telegram.Message, c chan<- uint8
 	}
 	switch strings.ToLower(n.Text[1:d]) {
 	case "clear":
-		if r := w.clear(x, n.Chat.ID); !r {
-			return errmsg
-		}
-		c <- 0
-		return cleared
+		w.confirm[n.Chat.ID] = confirm
+		return `Please reply with "confirm" in order to clear your list.`
 	case "add", "list", "remove":
 	default:
 		return invalid
@@ -185,11 +192,8 @@ func (w *Watcher) action(x context.Context, i int64, s string, a bool, c chan<- 
 	if p := strings.IndexByte(s, ','); p == -1 && !a {
 		switch strings.ToLower(strings.TrimSpace(s)) {
 		case "all", "clear":
-			if r := w.clear(x, i); !r {
-				return errmsg
-			}
-			c <- 0
-			return cleared
+			w.confirm[i] = confirm
+			return `Please reply with "confirm" in order to clear your list.`
 		}
 	}
 	n, msg := split(s)
@@ -204,7 +208,7 @@ func (w *Watcher) action(x context.Context, i int64, s string, a bool, c chan<- 
 			}
 		}
 		c <- 0
-		return success
+		return "Awesome! Your following list was updated!"
 	}
 	var (
 		u bool
@@ -232,7 +236,7 @@ func (w *Watcher) action(x context.Context, i int64, s string, a bool, c chan<- 
 	} else {
 		c <- 0
 	}
-	return success
+	return "Awesome! Your following list was updated!"
 }
 func (w *Watcher) send(x context.Context, g *sync.WaitGroup, m chan message, t <-chan *twitter.Tweet) {
 	w.log.Debug("Starting Telegram sender thread...")

@@ -47,6 +47,7 @@ type Watcher struct {
 	backoff time.Duration
 	allowed []string
 	blocked []string
+	confirm map[int64]struct{}
 }
 type message struct {
 	msg   telegram.MessageConfig
@@ -167,5 +168,6 @@ func New(s string, empty bool) (*Watcher, error) {
 		backoff: c.Timeouts.Backoff,
 		allowed: c.Allowed,
 		blocked: c.Blocked,
+		confirm: make(map[int64]struct{}),
 	}, nil
 }
