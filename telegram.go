@@ -154,7 +154,7 @@ func (w *Watcher) tweet(x context.Context, m chan<- message, t *twitter.Tweet) {
 	r.Close()
 }
 func (w *Watcher) message(x context.Context, n *telegram.Message, c chan<- uint8) string {
-	if !canUseACL(n.From.String(), w.allowed, w.blocked) {
+	if len(n.From.UserName) == 0 || !canUseACL(n.From.UserName, w.allowed, w.blocked) {
 		return `I'm sorry but my permissions do not allow you to use this service.`
 	}
 	_, ok := w.confirm[n.Chat.ID]
