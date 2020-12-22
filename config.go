@@ -41,16 +41,16 @@ const Defaults = `{
 	},
 	"blocked": [],
 	"allowed": [],
-	"timeouts": {
-		"backoff": 5000000000,
-		"resolve": 21600000000000,
-		"database": 180000000000
-	},
 	"twitter": {
 		"access_key": "",
 		"consumer_key": "",
 		"access_secret": "",
 		"consumer_secret": ""
+	},
+	"timeouts": {
+		"backoff": 5000000000,
+		"resolve": 21600000000000,
+		"database": 180000000000
 	},
 	"telegram_key": ""
 }
@@ -65,7 +65,7 @@ Please try again later.`
 Please use a command from the following list:
 /list
 /clear
-/add <@username1,@usernameN,..>
+/add <@username1,@usernameN,..> [keyword1,keywordN,..]
 /remove <@username1,@usernameN,..|clear|all>`
 )
 
