@@ -154,7 +154,7 @@ func (w *Watcher) action(x context.Context, i int64, s string, a bool, c chan<- 
 			return `Please reply with "confirm" in order to clear your list.`
 		}
 	}
-	n, k, msg := split(s)
+	n, k, msg := split(strings.TrimSpace(s))
 	if len(msg) > 0 {
 		return msg
 	}
