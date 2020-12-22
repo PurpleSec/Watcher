@@ -225,7 +225,7 @@ func split(s string) ([]string, string, string) {
 		t    string
 	)
 	if z > 0 {
-		k, v = s[z+1:], s[:z]
+		k, v = strings.TrimSpace(s[z+1:]), strings.TrimSpace(s[:z])
 	}
 	for i, e := 0, strings.IndexByte(v, ','); i < len(v); i, e = e+1, strings.IndexByte(v[e+1:], ',') {
 		if e == -1 {
@@ -235,7 +235,8 @@ func split(s string) ([]string, string, string) {
 			r = append(r, t[1:])
 			break
 		}
-		if e, t = e+i, strings.TrimSpace(v[i:e]); !isValid(t) {
+		e += i
+		if t = strings.TrimSpace(v[i:e]); !isValid(t) {
 			return nil, k, `The username "` + t + `" is not a valid Twitter username!` + "\n\nTwitter names must start with \"@\" and contain no special characters or spaces."
 		}
 		r = append(r, t[1:])
