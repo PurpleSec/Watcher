@@ -1,4 +1,4 @@
-// Copyright (C) 2020 iDigitalFlame
+// Copyright (C) 2020 - 2021 iDigitalFlame
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Affero General Public License as published
@@ -38,16 +38,18 @@ import (
 // Watcher is a struct that is used to manage the threads and proceses used to control and operate
 // the Telegram Watcher bot service.
 type Watcher struct {
-	sql     *mapper.Map
-	bot     *telegram.BotAPI
-	log     logx.Log
-	tick    *time.Ticker
-	cancel  context.CancelFunc
-	twitter *twitter.Client
-	backoff time.Duration
-	allowed []string
-	blocked []string
-	confirm map[int64]struct{}
+	sql      *mapper.Map
+	bot      *telegram.BotAPI
+	log      logx.Log
+	tick     *time.Ticker
+	track    int64
+	cancel   context.CancelFunc
+	twitter  *twitter.Client
+	backoff  time.Duration
+	allowed  []string
+	blocked  []string
+	confirm  map[int64]struct{}
+	keywords string
 }
 type message struct {
 	msg   telegram.MessageConfig
@@ -75,6 +77,7 @@ func (w *Watcher) Run() error {
 	w.log.Info("Twitter Watcher Telegram Bot Started, spinning up threads...")
 	go w.send(x, &g, m, t)
 	go w.watch(x, &g, c, t)
+	go w.mentions(x, &g, t)
 	go w.receive(x, &g, m, r, c)
 	for {
 		select {
@@ -102,7 +105,7 @@ cleanup:
 // New returns a new Watcher instance based on the passed config file path. This function will preform any
 // setup steps needed to start the Watcher. Once complete, use the 'Run' function to actually start the Watcher.
 // This function allows for specifying the option to clear the database before starting.
-func New(s string, empty bool) (*Watcher, error) {
+func New(s string, empty, update bool) (*Watcher, error) {
 	var c config
 	j, err := ioutil.ReadFile(s)
 	if err != nil {
@@ -151,6 +154,12 @@ func New(s string, empty bool) (*Watcher, error) {
 			return nil, &errval{s: "could not clean up database schema", e: err}
 		}
 	}
+	if update {
+		if err = m.Batch(upgradeStatements); err != nil {
+			m.Close()
+			return nil, &errval{s: "could not update database schema", e: err}
+		}
+	}
 	if err = m.Batch(setupStatements); err != nil {
 		m.Close()
 		return nil, &errval{s: "could not set up database schema", e: err}
@@ -160,14 +169,16 @@ func New(s string, empty bool) (*Watcher, error) {
 		return nil, &errval{s: "could not set up database schema", e: err}
 	}
 	return &Watcher{
-		sql:     m,
-		bot:     b,
-		log:     l,
-		tick:    time.NewTicker(c.Timeouts.Resolve),
-		twitter: t,
-		backoff: c.Timeouts.Backoff,
-		allowed: c.Allowed,
-		blocked: c.Blocked,
-		confirm: make(map[int64]struct{}),
+		sql:      m,
+		bot:      b,
+		log:      l,
+		tick:     time.NewTicker(c.Timeouts.Resolve),
+		track:    c.Mentions.Receiver,
+		twitter:  t,
+		backoff:  c.Timeouts.Backoff,
+		allowed:  c.Allowed,
+		blocked:  c.Blocked,
+		confirm:  make(map[int64]struct{}),
+		keywords: c.Mentions.Keywords,
 	}, nil
 }

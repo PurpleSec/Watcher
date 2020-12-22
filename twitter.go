@@ -1,4 +1,4 @@
-// Copyright (C) 2020 iDigitalFlame
+// Copyright (C) 2020 - 2021 iDigitalFlame
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Affero General Public License as published
@@ -20,6 +20,7 @@ import (
 	"context"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -148,6 +149,65 @@ func (w *Watcher) stream(x context.Context, f bool, a bool) *twitter.StreamFilte
 	w.log.Debug("Twitter watch list generated, subscribing to %d users...", len(l))
 	return &twitter.StreamFilterParams{Follow: l, Language: []string{"en"}, StallWarnings: twitter.Bool(true)}
 }
+func (w *Watcher) mentions(x context.Context, g *sync.WaitGroup, o chan<- *twitter.Tweet) {
+	if w.track == 0 || len(w.keywords) == 0 {
+		return
+	}
+	s, err := w.twitter.Streams.User(&twitter.StreamUserParams{
+		With:          "followings",
+		Track:         strings.Split(w.keywords, ","),
+		Replies:       "all",
+		Language:      []string{"en"},
+		FilterLevel:   "none",
+		StallWarnings: twitter.Bool(true),
+	})
+	if err != nil {
+		w.log.Error("Error creating initial Twitter mention stream: %s!", err.Error())
+		w.cancel()
+		return
+	}
+	w.log.Debug("Starting Twitter mentions thread...")
+	for g.Add(1); ; {
+		select {
+		case n := <-s.Messages:
+			switch t := n.(type) {
+			case *twitter.Tweet:
+				t.WithheldScope = "mention"
+				o <- t
+			case *twitter.Event:
+			case *twitter.FriendsList:
+			case *twitter.UserWithheld:
+			case *twitter.DirectMessage:
+			case *twitter.StatusDeletion:
+			case *twitter.StatusWithheld:
+			case *twitter.LocationDeletion:
+			case *twitter.StreamLimit:
+				w.log.Warning("Twitter mention thread received a StreamLimit message of %d!", t.Track)
+			case *twitter.StallWarning:
+				w.log.Warning("Twitter mention thread received a StallWarning message: %s!", t.Message)
+			case *twitter.StreamDisconnect:
+				w.log.Error("Twitter mention thread received a StreamDisconnect message: %s!", t.Reason)
+				s.Stop()
+				g.Done()
+				return
+			case *url.Error:
+				w.log.Error("Twitter mention thread received an error: %s!", t.Error())
+				s.Stop()
+				g.Done()
+				return
+			default:
+				if t != nil {
+					w.log.Warning("Twitter mention thread received an unrecognized message (%T): %s\n", t, t)
+				}
+			}
+		case <-x.Done():
+			w.log.Debug("Stopping Twitter mention thread.")
+			s.Stop()
+			g.Done()
+			return
+		}
+	}
+}
 func (w *Watcher) watch(x context.Context, g *sync.WaitGroup, c chan uint8, o chan<- *twitter.Tweet) {
 	var (
 		z   = make(chan interface{})
@@ -185,9 +245,14 @@ func (w *Watcher) watch(x context.Context, g *sync.WaitGroup, c chan uint8, o ch
 		case n := <-r:
 			switch t := n.(type) {
 			case *twitter.Tweet:
-				if !t.Retweeted && t.RetweetedStatus == nil && len(t.QuotedStatusIDStr) == 0 && len(t.InReplyToStatusIDStr) == 0 {
-					o <- t
+				if len(t.Text) == 0 || t.Text[0] == '@' || t.Retweeted || t.RetweetedStatus != nil {
+					break
 				}
+				if len(t.QuotedStatusIDStr) == 0 && len(t.InReplyToStatusIDStr) == 0 {
+					break
+				}
+				t.WithheldScope = ""
+				o <- t
 			case *twitter.Event:
 			case *twitter.FriendsList:
 			case *twitter.UserWithheld:

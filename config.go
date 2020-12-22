@@ -1,4 +1,4 @@
-// Copyright (C) 2020 iDigitalFlame
+// Copyright (C) 2020 - 2021 iDigitalFlame
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Affero General Public License as published
@@ -18,6 +18,7 @@ package watcher
 
 import (
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/PurpleSec/logx"
@@ -68,41 +69,62 @@ Please use a command from the following list:
 /remove <@username1,@usernameN,..|clear|all>`
 )
 
-type log struct {
-	File  string `json:"file"`
-	Level int    `json:"level"`
-}
-type auth struct {
-	AccessKey      string `json:"access_key"`
-	ConsumerKey    string `json:"consumer_key"`
-	AccessSecret   string `json:"access_secret"`
-	ConsumerSecret string `json:"consumer_secret"`
-}
 type errval struct {
 	e error
 	s string
 }
 type config struct {
-	Log      log      `json:"log"`
-	Twitter  auth     `json:"twitter"`
+	Log struct {
+		File  string `json:"file"`
+		Level int    `json:"level"`
+	} `json:"log"`
+	Twitter struct {
+		AccessKey      string `json:"access_key"`
+		ConsumerKey    string `json:"consumer_key"`
+		AccessSecret   string `json:"access_secret"`
+		ConsumerSecret string `json:"consumer_secret"`
+	} `json:"twitter"`
 	Blocked  []string `json:"blocked"`
 	Allowed  []string `json:"allowed"`
-	Timeouts timeouts `json:"timeouts"`
-	Telegram string   `json:"telegram_key"`
-	Database database `json:"db"`
-}
-type timeouts struct {
-	Resolve  time.Duration `json:"resolver"`
-	Backoff  time.Duration `json:"backoff"`
-	Database time.Duration `json:"database"`
-}
-type database struct {
-	Name     string `json:"database"`
-	Server   string `json:"host"`
-	Username string `json:"user"`
-	Password string `json:"password"`
+	Mentions struct {
+		Keywords string `json:"keywords"`
+		Receiver int64  `json:"chat"`
+	} `json:"mentions"`
+	Timeouts struct {
+		Resolve  time.Duration `json:"resolver"`
+		Backoff  time.Duration `json:"backoff"`
+		Database time.Duration `json:"database"`
+	} `json:"timeouts"`
+	Telegram string `json:"telegram_key"`
+	Database struct {
+		Name     string `json:"database"`
+		Server   string `json:"host"`
+		Username string `json:"user"`
+		Password string `json:"password"`
+	} `json:"db"`
 }
 
+func isValid(s string) bool {
+	if len(s) == 0 || s[0] != '@' || len(s) > 16 {
+		return false
+	}
+	for i := range s {
+		if i == 0 {
+			continue
+		}
+		switch {
+		case s[i] == '_':
+			continue
+		case s[i] < 48 || s[i] > 122:
+			return false
+		case s[i] > 57 && s[i] < 65:
+			return false
+		case s[i] > 90 && s[i] < 96:
+			return false
+		}
+	}
+	return true
+}
 func (e errval) Error() string {
 	if e.e == nil {
 		return e.s
@@ -159,4 +181,64 @@ func stringLowMatch(s, m string) bool {
 		}
 	}
 	return true
+}
+func stringSplitContains(s, m string) bool {
+	for i, e := 0, strings.IndexByte(m, ','); i < len(m); i, e = e+1, strings.IndexByte(m[e+1:], ',') {
+		if e == -1 {
+			if strings.Contains(s, m[i:]) {
+				return true
+			}
+			break
+		}
+		if e += i; strings.Contains(s, m[i:e]) {
+			return true
+		}
+	}
+	return false
+}
+func canUseACL(n string, a, d []string) bool {
+	if len(d) == 0 && len(a) == 0 {
+		return true
+	}
+	if len(d) > 0 {
+		for i := range d {
+			if stringLowMatch(n, d[i]) {
+				return false
+			}
+		}
+	}
+	if len(a) == 0 {
+		return true
+	}
+	for i := range a {
+		if stringLowMatch(n, a[i]) {
+			return true
+		}
+	}
+	return false
+}
+func split(s string) ([]string, string, string) {
+	var (
+		z    = strings.IndexByte(s, ' ')
+		v, k = s, ""
+		r    []string
+		t    string
+	)
+	if z > 0 {
+		k, v = s[z+1:], s[:z]
+	}
+	for i, e := 0, strings.IndexByte(v, ','); i < len(v); i, e = e+1, strings.IndexByte(v[e+1:], ',') {
+		if e == -1 {
+			if t = strings.TrimSpace(v[i:]); !isValid(t) {
+				return nil, k, `The username "` + t + `" is not a valid Twitter username!` + "\n\nTwitter names must start with \"@\" and contain no special characters or spaces."
+			}
+			r = append(r, t[1:])
+			break
+		}
+		if e, t = e+i, strings.TrimSpace(v[i:e]); !isValid(t) {
+			return nil, k, `The username "` + t + `" is not a valid Twitter username!` + "\n\nTwitter names must start with \"@\" and contain no special characters or spaces."
+		}
+		r = append(r, t[1:])
+	}
+	return r, k, ""
 }

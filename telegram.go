@@ -1,4 +1,4 @@
-// Copyright (C) 2020 iDigitalFlame
+// Copyright (C) 2020 - 2021 iDigitalFlame
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Affero General Public License as published
@@ -18,6 +18,7 @@ package watcher
 
 import (
 	"context"
+	"database/sql"
 	"strings"
 	"sync"
 	"time"
@@ -35,59 +36,6 @@ var builders = sync.Pool{
 
 var confirm struct{}
 
-func split(s string) ([]string, string) {
-	var (
-		n  = strings.Split(s, ",")
-		ok bool
-	)
-	for i := range n {
-		if n[i], ok = validTwitter(n[i]); !ok {
-			return nil, `The username "` + n[i] + `" is not a valid Twitter username!` + "\n\nTwitter names must start with \"@\" and contain no special characters or spaces."
-		}
-	}
-	return n, ""
-}
-func validTwitter(s string) (string, bool) {
-	v := strings.TrimSpace(s)
-	if len(v) == 0 || v[0] != '@' || len(v) > 16 {
-		return v, false
-	}
-	v = v[1:]
-	for i := range v {
-		switch {
-		case v[i] == '_':
-			continue
-		case v[i] < 48 || v[i] > 122:
-			return v, false
-		case v[i] > 57 && v[i] < 65:
-			return v, false
-		case v[i] > 90 && v[i] < 96:
-			return v, false
-		}
-	}
-	return v, true
-}
-func canUseACL(n string, a, d []string) bool {
-	if len(d) == 0 && len(a) == 0 {
-		return true
-	}
-	if len(d) > 0 {
-		for i := range d {
-			if stringLowMatch(n, d[i]) {
-				return false
-			}
-		}
-	}
-	if len(a) == 0 {
-		return true
-	}
-	for i := range a {
-		if stringLowMatch(n, a[i]) {
-			return true
-		}
-	}
-	return false
-}
 func (w *Watcher) clear(x context.Context, i int64) bool {
 	if _, err := w.sql.ExecContext(x, "del_all", i); err != nil {
 		w.log.Error("Error clearing Twitter subscriptions from database: %s!", err.Error())
@@ -105,10 +53,11 @@ func (w *Watcher) list(x context.Context, i int64) string {
 		c int
 		t int64
 		s string
+		k sql.NullString
 		b = builders.Get().(*strings.Builder)
 	)
 	for b.WriteString("I am currently following these users:\n"); r.Next(); {
-		if err := r.Scan(&s, &t); err != nil {
+		if err := r.Scan(&s, &t, &k); err != nil {
 			w.log.Error("Error scanning data into Twitter subscriptions list from database: %s!", err.Error())
 			continue
 		}
@@ -118,6 +67,9 @@ func (w *Watcher) list(x context.Context, i int64) string {
 		b.WriteString("- @" + s)
 		if t == 0 {
 			b.WriteString(" (Might not be valid!)")
+		}
+		if k.Valid && len(k.String) > 0 {
+			b.WriteString("\n  [" + k.String + "]")
 		}
 		b.WriteByte('\n')
 		c++
@@ -138,18 +90,24 @@ func (w *Watcher) tweet(x context.Context, m chan<- message, t *twitter.Tweet) {
 	}
 	var (
 		c int64
+		k sql.NullString
+		v = strings.ToLower(t.FullText)
 		s = "Tweet from @" + t.User.ScreenName + "!\n\n" + t.Text + "\n\nhttps://twitter.com/" + t.User.ScreenName + "/status/" + t.IDStr
 	)
 	for r.Next() {
-		if err := r.Scan(&c); err != nil {
+		if err := r.Scan(&c, &k); err != nil {
 			w.log.Error("Error scanning data into Twitter subscriptions from database: %s!", err.Error())
 			continue
 		}
 		if c == 0 {
 			continue
 		}
-		w.log.Trace("Sending Telegram update for Tweet %s to %d...", t.User.IDStr, c)
-		m <- message{tries: 2, msg: telegram.NewMessage(c, s)}
+		if (!k.Valid && len(k.String) == 0) || (k.Valid && stringSplitContains(v, k.String)) {
+			w.log.Trace("Sending Telegram update for Tweet %s to %d...", t.User.IDStr, c)
+			m <- message{tries: 2, msg: telegram.NewMessage(c, s)}
+			continue
+		}
+		w.log.Trace("Skipping Telegram update for Tweet %s to %d as it does not match keywords!", t.IDStr, c)
 	}
 	r.Close()
 }
@@ -196,9 +154,13 @@ func (w *Watcher) action(x context.Context, i int64, s string, a bool, c chan<- 
 			return `Please reply with "confirm" in order to clear your list.`
 		}
 	}
-	n, msg := split(s)
+	n, k, msg := split(s)
 	if len(msg) > 0 {
 		return msg
+	}
+	if len(k) > 256 {
+		w.log.Warning("User %d: Invalid keyword size specified %d, must be less than 256!", i, len(k))
+		return `I'm sorry, but keyword lists must be under 256 characters!`
 	}
 	if !a {
 		for p := range n {
@@ -211,11 +173,12 @@ func (w *Watcher) action(x context.Context, i int64, s string, a bool, c chan<- 
 		return "Awesome! Your following list was updated!"
 	}
 	var (
+		e = sql.NullString{Valid: len(k) > 0, String: k}
 		u bool
 		m int64
 	)
 	for p := range n {
-		r, err := w.sql.QueryContext(x, "add", i, n[p])
+		r, err := w.sql.QueryContext(x, "add", i, n[p], e)
 		if err != nil {
 			w.log.Error("Error adding Twitter subscription entry to database: %s!", err.Error())
 			return errmsg
@@ -244,6 +207,19 @@ func (w *Watcher) send(x context.Context, g *sync.WaitGroup, m chan message, t <
 		select {
 		case n := <-t:
 			w.log.Trace("Received Tweet from %s: %s...", n.User.ScreenName, n.User.IDStr)
+			if n.WithheldScope == "mention" {
+				if w.track == 0 {
+					break
+				}
+				w.log.Trace("Tweet %s is a mention for %d...", n.IDStr, w.track)
+				m <- message{
+					msg: telegram.NewMessage(
+						w.track, "Mention from @"+n.User.ScreenName+"!\n\n"+n.Text+"\n\nhttps://twitter.com/"+n.User.ScreenName+"/status/"+n.IDStr,
+					),
+					tries: 2,
+				}
+				break
+			}
 			w.tweet(x, m, n)
 		case n := <-m:
 			_, err := w.bot.Send(n.msg)

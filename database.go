@@ -1,4 +1,4 @@
-// Copyright (C) 2020 iDigitalFlame
+// Copyright (C) 2020 - 2021 iDigitalFlame
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Affero General Public License as published
@@ -26,6 +26,11 @@ var cleanStatements = []string{
 	`DROP PROCEDURE IF EXISTS GetAllSubscriptions`,
 	`DROP PROCEDURE IF EXISTS RemoveAllSubscriptions`,
 }
+var upgradeStatements = []string{
+	`DROP PROCEDURE IF EXISTS CleanupRoutine`,
+	`DROP PROCEDURE IF EXISTS AddSubscription`,
+	`ALTER TABLE Subscribers ADD Keywords VARCHAR(256) NULL AFTER Mapping`,
+}
 
 var setupStatements = []string{
 	`CREATE TABLE IF NOT EXISTS Mappings(
@@ -37,6 +42,7 @@ var setupStatements = []string{
 		ID BIGINT(64) NOT NULL PRIMARY KEY AUTO_INCREMENT,
 		Chat BIGINT(64) NOT NULL,
 		Mapping BIGINT(64) NOT NULL,
+		Keywords VARCHAR(256) NULL,
 		FOREIGN KEY(Mapping) REFERENCES Mappings(ID)
 	)`,
 	`CREATE PROCEDURE IF NOT EXISTS CleanupRoutine()
@@ -49,7 +55,11 @@ var setupStatements = []string{
 						(SELECT MIN(Y.ID) FROM Subscribers Y WHERE Y.Chat = S.Chat AND Y.Mapping = S.Mapping) <> S.ID
 				) As Duplicates
 			);
-			DELETE FROM Mappings WHERE (SELECT COUNT(S.ID) FROM Subscribers S WHERE S.Mapping = ID) = 0;
+			DELETE FROM Mappings WHERE ID In (
+				SELECT * FROM (
+					SELECT M.ID FROM Mappings M WHERE (SELECT COUNT(S.ID) FROM Subscribers S WHERE S.Mapping = M.ID) = 0
+				) As Unused
+			);
 		COMMIT;
 	END;`,
 	`CREATE PROCEDURE IF NOT EXISTS GetAllSubscriptions()
@@ -64,7 +74,7 @@ var setupStatements = []string{
 			CALL CleanupRoutine();
 		COMMIT;
 	END;`,
-	`CREATE PROCEDURE IF NOT EXISTS AddSubscription(ChatID BIGINT(64), Name VARCHAR(20))
+	`CREATE PROCEDURE IF NOT EXISTS AddSubscription(ChatID BIGINT(64), Name VARCHAR(20), Keyword VARCHAR(256))
 	BEGIN
 		SET @exists = COALESCE(
 			(SELECT M.ID FROM Mappings M INNER JOIN Subscribers S ON S.Mapping = M.ID WHERE M.Name = Name AND S.Chat = ChatID LIMIT 1), 0
@@ -76,8 +86,10 @@ var setupStatements = []string{
 					INSERT INTO Mappings(Name) VALUES(Name);
 					SET @mid = (SELECT M.ID FROM Mappings M WHERE M.Name = Name LIMIT 1);
 				END IF;
-				INSERT INTO Subscribers(Mapping, Chat) VALUES(@mid, ChatID);
+				INSERT INTO Subscribers(Mapping, Chat, Keywords) VALUES(@mid, ChatID, Keyword);
 			COMMIT;
+		ELSE
+			UPDATE Subscribers SET Keywords=Keyword WHERE Chat = ChatID AND Mapping = @exists;
 		END IF;
 		SELECT M.Twitter FROM Mappings M WHERE M.ID = @mid;
 	END;`,
@@ -126,11 +138,11 @@ var setupStatements = []string{
 }
 
 var queryStatements = map[string]string{
-	"add":      `CALL AddSubscription(?, ?)`,
+	"add":      `CALL AddSubscription(?, ?, ?)`,
 	"del":      `CALL RemoveSubscription(?, ?)`,
 	"set":      `CALL UpdateMapping(?, ?, ?)`,
-	"list":     `SELECT M.Name, M.Twitter FROM Mappings M INNER JOIN Subscribers S ON S.Mapping = M.ID WHERE S.Chat = ?`,
-	"notify":   `SELECT S.Chat FROM Subscribers S INNER JOIN Mappings M ON M.ID = S.Mapping WHERE M.Twitter = ?`,
+	"list":     `SELECT M.Name, M.Twitter, S.Keywords FROM Mappings M INNER JOIN Subscribers S ON S.Mapping = M.ID WHERE S.Chat = ?`,
+	"notify":   `SELECT S.Chat, S.Keywords FROM Subscribers S INNER JOIN Mappings M ON M.ID = S.Mapping WHERE M.Twitter = ?`,
 	"del_all":  `CALL RemoveAllSubscriptions(?)`,
 	"get_all":  `CALL GetAllSubscriptions()`,
 	"get_list": `SELECT (SELECT COUNT(ID) FROM Mappings) As Count, Twitter FROM Mappings`,
