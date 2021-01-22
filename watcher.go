@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -41,24 +42,30 @@ type Watcher struct {
 	sql      *mapper.Map
 	bot      *telegram.BotAPI
 	log      logx.Log
+	err      error
 	tick     *time.Ticker
-	track    int64
 	cancel   context.CancelFunc
 	twitter  *twitter.Client
 	backoff  time.Duration
 	allowed  []string
 	blocked  []string
 	confirm  map[int64]struct{}
-	keywords string
+	notifier *notifier
 }
 type message struct {
 	msg   telegram.MessageConfig
 	tries uint8
 }
+type notifier struct {
+	chat     int64
+	client   *twitter.Client
+	keywords []string
+}
 
 // Run will start the main Watcher process and all associated threads. This function will block until an
 // interrupt signal is received. This function returns any errors that occur during shutdown.
 func (w *Watcher) Run() error {
+	telegram.SetLogger(w.log)
 	r, err := w.bot.GetUpdatesChan(telegram.UpdateConfig{})
 	if err != nil {
 		w.sql.Close()
@@ -74,11 +81,11 @@ func (w *Watcher) Run() error {
 	)
 	signal.Notify(s, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	x, w.cancel = context.WithCancel(context.Background())
-	w.log.Info("Twitter Watcher Telegram Bot Started, spinning up threads...")
+	w.log.Info("Twitter Watcher Telegram Bot Started, spinning up threads..")
 	go w.send(x, &g, m, t)
 	go w.watch(x, &g, c, t)
-	go w.mentions(x, &g, t)
 	go w.receive(x, &g, m, r, c)
+	go w.mentions(x, &g, w.notifier, t)
 	for {
 		select {
 		case <-s:
@@ -99,7 +106,10 @@ cleanup:
 	close(s)
 	close(m)
 	close(t)
-	return w.sql.Close()
+	if err := w.sql.Close(); err != nil {
+		return err
+	}
+	return w.err
 }
 
 // New returns a new Watcher instance based on the passed config file path. This function will preform any
@@ -125,6 +135,7 @@ func New(s string, empty, update bool) (*Watcher, error) {
 		}
 		l.Add(f)
 	}
+	l.SetPrintLevel(logx.Error)
 	t := twitter.NewClient(
 		oauth1.NewConfig(c.Twitter.ConsumerKey, c.Twitter.ConsumerSecret).Client(
 			context.Background(), oauth1.NewToken(c.Twitter.AccessKey, c.Twitter.AccessSecret),
@@ -132,6 +143,26 @@ func New(s string, empty, update bool) (*Watcher, error) {
 	)
 	if _, _, err := t.Accounts.VerifyCredentials(nil); err != nil {
 		return nil, &errval{s: "login to Twitter failed", e: err}
+	}
+	var y *notifier
+	if c.Mentions.Receiver != 0 && len(c.Mentions.Keywords) > 0 {
+		y = &notifier{chat: c.Mentions.Receiver}
+		if len(c.Mentions.Twitter.AccessKey) > 0 && len(c.Mentions.Twitter.AccessSecret) > 0 && len(c.Mentions.Twitter.ConsumerKey) > 0 && len(c.Mentions.Twitter.ConsumerSecret) > 0 {
+			y.client = twitter.NewClient(
+				oauth1.NewConfig(c.Twitter.ConsumerKey, c.Twitter.ConsumerSecret).Client(
+					context.Background(), oauth1.NewToken(c.Twitter.AccessKey, c.Twitter.AccessSecret),
+				),
+			)
+			if _, _, err := y.client.Accounts.VerifyCredentials(nil); err != nil {
+				return nil, &errval{s: "login to Twitter mention acount failed", e: err}
+			}
+		}
+		for _, k := range strings.Split(c.Mentions.Keywords, ",") {
+			y.keywords = append(y.keywords, strings.TrimSpace(k))
+		}
+		if len(y.keywords) == 0 {
+			y = nil
+		}
 	}
 	b, err := telegram.NewBotAPI(c.Telegram)
 	if err != nil {
@@ -173,12 +204,11 @@ func New(s string, empty, update bool) (*Watcher, error) {
 		bot:      b,
 		log:      l,
 		tick:     time.NewTicker(c.Timeouts.Resolve),
-		track:    c.Mentions.Receiver,
 		twitter:  t,
 		backoff:  c.Timeouts.Backoff,
 		allowed:  c.Allowed,
 		blocked:  c.Blocked,
 		confirm:  make(map[int64]struct{}),
-		keywords: c.Mentions.Keywords,
+		notifier: y,
 	}, nil
 }

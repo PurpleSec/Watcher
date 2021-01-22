@@ -88,11 +88,15 @@ func (w *Watcher) tweet(x context.Context, m chan<- message, t *twitter.Tweet) {
 		w.log.Error("Error getting Twitter subscriptions from database: %s!", err.Error())
 		return
 	}
+	b := t.FullText
+	if len(b) == 0 {
+		b = t.Text
+	}
 	var (
 		c int64
 		k sql.NullString
-		v = strings.ToLower(t.FullText)
-		s = "Tweet from @" + t.User.ScreenName + "!\n\n" + t.Text + "\n\nhttps://twitter.com/" + t.User.ScreenName + "/status/" + t.IDStr
+		v = strings.ToLower(b)
+		s = "Tweet from @" + t.User.ScreenName + "!\n\n" + b + "\n\nhttps://twitter.com/" + t.User.ScreenName + "/status/" + t.IDStr
 	)
 	for r.Next() {
 		if err := r.Scan(&c, &k); err != nil {
@@ -102,12 +106,13 @@ func (w *Watcher) tweet(x context.Context, m chan<- message, t *twitter.Tweet) {
 		if c == 0 {
 			continue
 		}
-		if (!k.Valid && len(k.String) == 0) || (k.Valid && stringSplitContains(v, k.String)) {
-			w.log.Trace("Sending Telegram update for Tweet %s to %d...", t.User.IDStr, c)
+		w.log.Trace("Received Tweet \"twitter.com/%s/status/%s\", match on Chat %d (Keywords: %t).", t.User.ScreenName, t.IDStr, c, k.Valid)
+		if !k.Valid || (k.Valid && stringSplitContains(v, k.String)) {
+			w.log.Trace("Sending Telegram update for Tweet \"twitter.com/%s/status/%s\" to chat %d..", t.User.ScreenName, t.IDStr, c)
 			m <- message{tries: 2, msg: telegram.NewMessage(c, s)}
 			continue
 		}
-		w.log.Trace("Skipping Telegram update for Tweet %s to %d as it does not match keywords!", t.IDStr, c)
+		w.log.Trace("Skipping Telegram update for Tweet \"twitter.com/%s/status/%s\" to %d as it does not match keywords!", t.User.ScreenName, t.IDStr, c)
 	}
 	r.Close()
 }
@@ -202,19 +207,18 @@ func (w *Watcher) action(x context.Context, i int64, s string, a bool, c chan<- 
 	return "Awesome! Your following list was updated!"
 }
 func (w *Watcher) send(x context.Context, g *sync.WaitGroup, m chan message, t <-chan *twitter.Tweet) {
-	w.log.Debug("Starting Telegram sender thread...")
+	w.log.Info("Starting Telegram sender thread..")
 	for g.Add(1); ; {
 		select {
 		case n := <-t:
-			w.log.Trace("Received Tweet from %s: %s...", n.User.ScreenName, n.User.IDStr)
-			if n.WithheldScope == "mention" {
-				if w.track == 0 {
+			if w.log.Debug("Received Tweet \"twitter.com/%s/status/%s\"..", n.User.ScreenName, n.IDStr); n.WithheldScope == "mention" {
+				if w.notifier == nil {
 					break
 				}
-				w.log.Trace("Tweet %s is a mention for %d...", n.IDStr, w.track)
+				w.log.Debug("Tweet \"twitter.com/%s/%s\" is a mention for %d..", n.User.ScreenName, n.IDStr, w.notifier.chat)
 				m <- message{
 					msg: telegram.NewMessage(
-						w.track, "Mention from @"+n.User.ScreenName+"!\n\n"+n.Text+"\n\nhttps://twitter.com/"+n.User.ScreenName+"/status/"+n.IDStr,
+						w.notifier.chat, "Mention from @"+n.User.ScreenName+"!\n\n"+n.Text+"\n\nhttps://twitter.com/"+n.User.ScreenName+"/status/"+n.IDStr,
 					),
 					tries: 2,
 				}
@@ -232,28 +236,28 @@ func (w *Watcher) send(x context.Context, g *sync.WaitGroup, m chan message, t <
 				break
 			}
 			n.tries = n.tries - 1
-			w.log.Trace("Sleeping for %s to Telegram prevent rate-limiting!", w.backoff.String())
+			w.log.Debug("Sleeping for %s to Telegram prevent rate-limiting!", w.backoff.String())
 			time.Sleep(w.backoff)
 			m <- n
 		case <-x.Done():
-			w.log.Debug("Stopping Telegram sender thread.")
+			w.log.Info("Stopping Telegram sender thread.")
 			g.Done()
 			return
 		}
 	}
 }
 func (w *Watcher) receive(x context.Context, g *sync.WaitGroup, m chan<- message, r <-chan telegram.Update, c chan<- uint8) {
-	w.log.Debug("Starting Telegram receiver thread...")
+	w.log.Info("Starting Telegram receiver thread..")
 	for g.Add(1); ; {
 		select {
 		case n := <-r:
 			if n.Message == nil || n.Message.Chat == nil {
 				break
 			}
-			w.log.Trace("Received Telegram message from %s: %d...", n.Message.From.String(), n.Message.Chat.ID)
+			w.log.Trace("Received Telegram message from %s (%d).", n.Message.From.String(), n.Message.Chat.ID)
 			m <- message{tries: 2, msg: telegram.NewMessage(n.Message.Chat.ID, w.message(x, n.Message, c))}
 		case <-x.Done():
-			w.log.Debug("Stopping Telegram receiver thread.")
+			w.log.Info("Stopping Telegram receiver thread.")
 			g.Done()
 			return
 		}

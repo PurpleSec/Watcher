@@ -87,6 +87,12 @@ type config struct {
 	Blocked  []string `json:"blocked"`
 	Allowed  []string `json:"allowed"`
 	Mentions struct {
+		Twitter struct {
+			AccessKey      string `json:"access_key"`
+			ConsumerKey    string `json:"consumer_key"`
+			AccessSecret   string `json:"access_secret"`
+			ConsumerSecret string `json:"consumer_secret"`
+		} `json:"auth"`
 		Keywords string `json:"keywords"`
 		Receiver int64  `json:"chat"`
 	} `json:"mentions"`

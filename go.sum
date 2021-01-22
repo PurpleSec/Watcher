@@ -1,5 +1,7 @@
 github.com/PurpleSec/logx v1.0.0 h1:gffIzRnADlWxzblLF0auhNjfWCl2CJsbF8Tb8O3of+U=
 github.com/PurpleSec/logx v1.0.0/go.mod h1:tkLK6CqkhkRSVejDMVgZa0jTq97aRikVNjAON9iUiK0=
+github.com/PurpleSec/logx v1.1.0 h1:652khHxzDg+TzqTL1cSNAVuymL6KEf91qd7v2cDRlAc=
+github.com/PurpleSec/logx v1.1.0/go.mod h1:tkLK6CqkhkRSVejDMVgZa0jTq97aRikVNjAON9iUiK0=
 github.com/PurpleSec/mapper v1.2.0 h1:DKI8It3Ws1Lq2nq2GQJkJKjUOOxmzihnapNZ1WA4dpc=
 github.com/PurpleSec/mapper v1.2.0/go.mod h1:JG1Dz4MqBCLDqTLp+k9l9eDLEGU3Ed16iFpzx5yb3oI=
 github.com/cenkalti/backoff v2.1.1+incompatible h1:tKJnvO2kl0zmb/jA5UKAt4VoEVw1qxKWjE/Bpp46npY=

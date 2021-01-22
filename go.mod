@@ -3,7 +3,7 @@ module github.com/iDigitalFlame/watcher
 go 1.15
 
 require (
-	github.com/PurpleSec/logx v1.0.0
+	github.com/PurpleSec/logx v1.1.0
 	github.com/PurpleSec/mapper v1.2.0
 	github.com/dghubble/go-twitter v0.0.0-20200725221434-4bc8ad7ad1b4
 	github.com/dghubble/oauth1 v0.6.0
