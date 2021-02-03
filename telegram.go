@@ -251,7 +251,7 @@ func (w *Watcher) receive(x context.Context, g *sync.WaitGroup, m chan<- message
 	for g.Add(1); ; {
 		select {
 		case n := <-r:
-			if n.Message == nil || n.Message.Chat == nil {
+			if n.Message == nil || n.Message.Chat == nil || len(n.Message.Text) == 0 {
 				break
 			}
 			w.log.Trace("Received Telegram message from %s (%d).", n.Message.From.String(), n.Message.Chat.ID)
