@@ -1,4 +1,4 @@
-// Copyright (C) 2020 - 2021 iDigitalFlame
+// Copyright 2021 PurpleSec Team
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Affero General Public License as published
@@ -20,11 +20,11 @@ import (
 	"flag"
 	"os"
 
-	"github.com/iDigitalFlame/watcher"
+	"github.com/PurpleSec/watcher"
 )
 
 const usage = `Twitter Watcher Telegram Bot
-iDigitalFlame 2020 - 2021 (idigitalflame.com)
+Purple Security (losynth.com/purple) 2021
 
 Usage:
   -h              Print this help menu.

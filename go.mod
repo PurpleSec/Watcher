@@ -1,4 +1,4 @@
-module github.com/iDigitalFlame/watcher
+module github.com/PurpleSec/watcher
 
 go 1.15
 

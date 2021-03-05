@@ -1,5 +1,5 @@
 #!/usr/bin/bash
-# Copyright (C) 2020 - 2021 iDigitalFlame
+# Copyright 2021 PurpleSec Team
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published
