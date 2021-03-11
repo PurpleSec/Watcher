@@ -39,27 +39,27 @@ import (
 // Watcher is a struct that is used to manage the threads and proceses used to control and operate
 // the Telegram Watcher bot service.
 type Watcher struct {
-	sql      *mapper.Map
-	bot      *telegram.BotAPI
 	log      logx.Log
 	err      error
+	sql      *mapper.Map
+	bot      *telegram.BotAPI
 	tick     *time.Ticker
 	cancel   context.CancelFunc
 	twitter  *twitter.Client
-	backoff  time.Duration
-	allowed  []string
-	blocked  []string
 	confirm  map[int64]struct{}
 	notifier *notifier
+	allowed  []string
+	blocked  []string
+	backoff  time.Duration
 }
 type message struct {
 	msg   telegram.MessageConfig
 	tries uint8
 }
 type notifier struct {
-	chat     int64
 	client   *twitter.Client
 	keywords []string
+	chat     int64
 }
 
 // Run will start the main Watcher process and all associated threads. This function will block until an

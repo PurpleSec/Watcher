@@ -23,7 +23,9 @@ import (
 	"github.com/PurpleSec/watcher"
 )
 
-const usage = `Twitter Watcher Telegram Bot
+const version = "v1.0.0"
+
+const usage = `Twitter Watcher Telegram Bot ` + version + `
 Purple Security (losynth.com/purple) 2021
 
 Usage:
@@ -36,7 +38,7 @@ Usage:
 
 func main() {
 	var (
-		args                = flag.NewFlagSet("Twitter Watcher Telegram Bot", flag.ExitOnError)
+		args                = flag.NewFlagSet("Twitter Watcher Telegram Bot "+version, flag.ExitOnError)
 		file                string
 		dump, empty, update bool
 	)

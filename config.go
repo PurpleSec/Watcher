@@ -74,18 +74,19 @@ type errval struct {
 	s string
 }
 type config struct {
-	Log struct {
-		File  string `json:"file"`
-		Level int    `json:"level"`
-	} `json:"log"`
 	Twitter struct {
 		AccessKey      string `json:"access_key"`
 		ConsumerKey    string `json:"consumer_key"`
 		AccessSecret   string `json:"access_secret"`
 		ConsumerSecret string `json:"consumer_secret"`
 	} `json:"twitter"`
-	Blocked  []string `json:"blocked"`
-	Allowed  []string `json:"allowed"`
+	Database struct {
+		Name     string `json:"database"`
+		Server   string `json:"host"`
+		Username string `json:"user"`
+		Password string `json:"password"`
+	} `json:"db"`
+	Telegram string `json:"telegram_key"`
 	Mentions struct {
 		Twitter struct {
 			AccessKey      string `json:"access_key"`
@@ -96,18 +97,17 @@ type config struct {
 		Keywords string `json:"keywords"`
 		Receiver int64  `json:"chat"`
 	} `json:"mentions"`
+	Blocked []string `json:"blocked"`
+	Allowed []string `json:"allowed"`
+	Log     struct {
+		File  string `json:"file"`
+		Level int    `json:"level"`
+	} `json:"log"`
 	Timeouts struct {
 		Resolve  time.Duration `json:"resolver"`
 		Backoff  time.Duration `json:"backoff"`
 		Database time.Duration `json:"database"`
 	} `json:"timeouts"`
-	Telegram string `json:"telegram_key"`
-	Database struct {
-		Name     string `json:"database"`
-		Server   string `json:"host"`
-		Username string `json:"user"`
-		Password string `json:"password"`
-	} `json:"db"`
 }
 
 func isValid(s string) bool {

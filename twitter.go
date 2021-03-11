@@ -32,9 +32,9 @@ const (
 )
 
 type mapping struct {
-	ID      int64
 	New     string
 	Name    string
+	ID      int64
 	Twitter int64
 }
 
