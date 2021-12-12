@@ -8,7 +8,7 @@ This is a bot for Telegram written in Golang, backed by a SQL database that is u
 
 ```[text]
 Twitter Watcher Telegram Bot
-Purple Security (losynth.com/purple) 2021
+Purple Security (losynth.com/purple) 2021 - 2022
 
 Usage:
   -h              Print this help menu.

@@ -1,4 +1,4 @@
-// Copyright 2021 PurpleSec Team
+// Copyright 2021 - 2022 PurpleSec Team
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Affero General Public License as published
@@ -23,10 +23,10 @@ import (
 	"github.com/PurpleSec/watcher"
 )
 
-const version = "v1.0.0"
+const version = "v1.2.0"
 
 const usage = `Twitter Watcher Telegram Bot ` + version + `
-Purple Security (losynth.com/purple) 2021
+Purple Security (losynth.com/purple) 2021 - 2022
 
 Usage:
   -h              Print this help menu.

@@ -1,4 +1,4 @@
-// Copyright 2021 PurpleSec Team
+// Copyright 2021 - 2022 PurpleSec Team
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Affero General Public License as published
@@ -17,6 +17,7 @@
 package watcher
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -27,7 +28,8 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-// Defaults is a string representation of a JSON formatted default configuration for a Watcher instance.
+// Defaults is a string representation of a JSON formatted default configuration
+// for a Watcher instance.
 const Defaults = `{
 	"db": {
 		"host": "tcp(localhost:3306)",
@@ -69,10 +71,6 @@ Please use a command from the following list:
 /remove <@username1,@usernameN,..|clear|all>`
 )
 
-type errval struct {
-	e error
-	s string
-}
 type config struct {
 	Twitter struct {
 		AccessKey      string `json:"access_key"`
@@ -131,36 +129,30 @@ func isValid(s string) bool {
 	}
 	return true
 }
-func (e errval) Error() string {
-	if e.e == nil {
-		return e.s
-	}
-	return e.s + ": " + e.e.Error()
-}
 func (c *config) check() error {
 	if len(c.Twitter.AccessKey) == 0 {
-		return &errval{s: "missing Twitter access key"}
+		return errors.New("missing Twitter access key")
 	}
 	if len(c.Twitter.AccessSecret) == 0 {
-		return &errval{s: "missing Twitter access secret"}
+		return errors.New("missing Twitter access secret")
 	}
 	if len(c.Twitter.ConsumerKey) == 0 {
-		return &errval{s: "missing Twitter consumer key"}
+		return errors.New("missing Twitter consumer key")
 	}
 	if len(c.Twitter.ConsumerSecret) == 0 {
-		return &errval{s: "missing Twitter consumer secret"}
+		return errors.New("missing Twitter consumer secret")
 	}
 	if c.Log.Level > int(logx.Fatal) || c.Log.Level < int(logx.Trace) {
-		return &errval{s: `invalid log level "` + strconv.Itoa(c.Log.Level) + `"`}
+		return errors.New(`invalid log level "` + strconv.Itoa(c.Log.Level) + `"`)
 	}
 	if len(c.Database.Name) == 0 {
-		return &errval{s: "missing database name"}
+		return errors.New("missing database name")
 	}
 	if len(c.Database.Server) == 0 {
-		return &errval{s: "missing database server"}
+		return errors.New("missing database server")
 	}
 	if len(c.Database.Username) == 0 {
-		return &errval{s: "missing database username"}
+		return errors.New("missing database username")
 	}
 	if c.Timeouts.Resolve == 0 {
 		c.Timeouts.Resolve = time.Hour * 6
@@ -191,12 +183,24 @@ func stringLowMatch(s, m string) bool {
 func stringSplitContains(s, m string) bool {
 	for i, e := 0, strings.IndexByte(m, ','); i < len(m); i, e = e+1, strings.IndexByte(m[e+1:], ',') {
 		if e == -1 {
-			if strings.Contains(s, m[i:]) {
-				return true
+			if m[i] == '-' && i+1 < len(m) {
+				return !strings.Contains(s, m[i+1:])
 			}
-			break
+			if (m[i] == '+' || m[i] == '\\') && i+1 < len(m) {
+				i++
+			}
+			return strings.Contains(s, m[i:])
 		}
-		if e += i; strings.Contains(s, m[i:e]) {
+		if e += i; m[i] == '-' && i+1 < e {
+			if strings.Contains(s, m[i:e]) {
+				break
+			}
+			continue
+		}
+		if (m[i] == '+' || m[i] == '\\') && i+1 < e {
+			i++
+		}
+		if strings.Contains(s, m[i:e]) {
 			return true
 		}
 	}

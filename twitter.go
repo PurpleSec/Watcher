@@ -1,4 +1,4 @@
-// Copyright 2021 PurpleSec Team
+// Copyright 2021 - 2022 PurpleSec Team
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Affero General Public License as published
@@ -32,10 +32,8 @@ const (
 )
 
 type mapping struct {
-	New     string
-	Name    string
-	ID      int64
-	Twitter int64
+	New, Name   string
+	ID, Twitter int64
 }
 
 func (w *Watcher) resolve(x context.Context, a bool) {
@@ -86,8 +84,7 @@ func (w *Watcher) resolve(x context.Context, a bool) {
 			continue
 		}
 		for v := range q {
-			_, ok := i[q[v].ID]
-			if ok {
+			if _, ok := i[q[v].ID]; ok {
 				w.log.Warning("Duplicate ID value %q detected with username %q!", q[v].IDStr, q[v].ScreenName)
 			}
 			i[q[v].ID] = q[v].ScreenName

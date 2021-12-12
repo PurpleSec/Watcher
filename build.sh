@@ -1,5 +1,5 @@
 #!/usr/bin/bash
-# Copyright 2021 PurpleSec Team
+# Copyright 2021 - 2022 PurpleSec Team
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published
