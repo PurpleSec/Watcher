@@ -107,7 +107,7 @@ func (w *Watcher) tweet(x context.Context, m chan<- message, t *twitter.Tweet) {
 			continue
 		}
 		w.log.Trace("Received Tweet \"twitter.com/%s/status/%s\", match on Chat %d (Keywords: %t).", t.User.ScreenName, t.IDStr, c, k.Valid)
-		if !k.Valid || (k.Valid && stringSplitContains(v, k.String)) {
+		if !k.Valid || (k.Valid && stringSplitContainsNLA(v, k.String)) {
 			w.log.Trace("Sending Telegram update for Tweet \"twitter.com/%s/status/%s\" to chat %d..", t.User.ScreenName, t.IDStr, c)
 			m <- message{tries: 2, msg: telegram.NewMessage(c, s)}
 			continue

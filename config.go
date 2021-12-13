@@ -18,6 +18,7 @@ package watcher
 
 import (
 	"errors"
+	"html"
 	"strconv"
 	"strings"
 	"time"
@@ -180,32 +181,6 @@ func stringLowMatch(s, m string) bool {
 	}
 	return true
 }
-func stringSplitContains(s, m string) bool {
-	for i, e := 0, strings.IndexByte(m, ','); i < len(m); i, e = e+1, strings.IndexByte(m[e+1:], ',') {
-		if e == -1 {
-			if m[i] == '-' && i+1 < len(m) {
-				return !strings.Contains(s, m[i+1:])
-			}
-			if (m[i] == '+' || m[i] == '\\') && i+1 < len(m) {
-				i++
-			}
-			return strings.Contains(s, m[i:])
-		}
-		if e += i; m[i] == '-' && i+1 < e {
-			if strings.Contains(s, m[i:e]) {
-				break
-			}
-			continue
-		}
-		if (m[i] == '+' || m[i] == '\\') && i+1 < e {
-			i++
-		}
-		if strings.Contains(s, m[i:e]) {
-			return true
-		}
-	}
-	return false
-}
 func canUseACL(n string, a, d []string) bool {
 	if len(d) == 0 && len(a) == 0 {
 		return true
@@ -226,6 +201,79 @@ func canUseACL(n string, a, d []string) bool {
 		}
 	}
 	return false
+}
+func stringSplitContainsNLA(s, m string) bool {
+	if len(s) == 0 {
+		return false
+	}
+	if len(m) == 0 {
+		return true
+	}
+	// NOTE(dij): This is to see if we have a valid minus char '-' next to a
+	//            comma as this indicates that we need to validate it.
+	n := strings.IndexByte(m, '-')
+	// NOTE(dij): Loop through to see for valid's.
+	//            If the '-' is at 0 or non-exist, skip this.
+	for n > 0 && n < len(m) {
+		if m[n-1] == ',' {
+			break
+		}
+		// NOTE(dij): Find a minus symbol next to a comma (the only
+		//            negative look-ahead valid value).
+		n = strings.IndexByte(m[n+1:], '-')
+	}
+	var r bool
+	for i, e, o := 0, strings.IndexByte(m, ','), n > -1; i < len(m); i, e = e+1, strings.IndexByte(m[e+1:], ',') {
+		if e == -1 {
+			// NOTE(dij): Last (or only) entry.
+			if m[i] == '-' && i+1 < len(m) {
+				// NOTE(dij): Found negative, takes precident.
+				if !strings.Contains(s, m[i+1:]) {
+					// NOTE(dij): If i == 0, the we're the only, we can rely
+					//            on this being true.
+					if i == 0 {
+						return true
+					}
+					// NOTE(dij): Rely on r to determine if we match.
+					break
+				}
+			}
+			// NOTE(dij): Fix escape chars.
+			if (m[i] == '+' || m[i] == '\\') && i+1 < len(m) {
+				i++
+			}
+			// NOTE(dij): Only one here, since its the last value, non-negative.
+			//            means everything else /must/ have passed
+			return strings.Contains(s, m[i:])
+		}
+		if e += i; m[i] == '-' && i+1 < e {
+			// NOTE(dij): Negative in list, if fails, we bail!
+			if strings.Contains(s, m[i+1:e]) {
+				return false
+			}
+			// NOTE(dij): Passed, continue..
+			continue
+		}
+		// NOTE(dij): Fix escape chars.
+		if (m[i] == '+' || m[i] == '\\') && i+1 < e {
+			i++
+		}
+		// NOTE(dij): Non-negative, lets check if keyword exists.
+		//            We also check r to see if true, since if r == true, we
+		//            already hit a positive keyword match, no need to redo.
+		if !r && strings.Contains(s, m[i:e]) {
+			// NOTE(dij): Passed keyword match!
+			if o {
+				// NOTE(dij): If negative is enabled, we set r to true, then
+				//            continue.
+				r = true
+				continue
+			}
+			// NOTE(dij): No negative, we just bail true.
+			return true
+		}
+	}
+	return r
 }
 func split(s string) ([]string, string, string) {
 	var (
@@ -251,5 +299,8 @@ func split(s string) ([]string, string, string) {
 		}
 		r = append(r, t[1:])
 	}
-	return r, k, ""
+	if len(k) == 0 {
+		return r, "", ""
+	}
+	return r, html.EscapeString(k), ""
 }
