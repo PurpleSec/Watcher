@@ -67,6 +67,7 @@ func (w *Watcher) resolve(x context.Context, a bool) {
 	}
 	var (
 		i = make(map[int64]string, len(l))
+		p []int64
 		n []string
 		q []twitter.User
 	)
@@ -79,7 +80,10 @@ func (w *Watcher) resolve(x context.Context, a bool) {
 		for _, v := range l[x:z] {
 			n = append(n, v.Name)
 		}
-		if q, _, err = w.twitter.Users.Lookup(&twitter.UserLookupParams{ScreenName: n}); err != nil {
+		for _, v := range l[x:z] {
+			p = append(p, v.Twitter)
+		}
+		if q, _, err = w.twitter.Users.Lookup(&twitter.UserLookupParams{UserID: p, ScreenName: n}); err != nil {
 			w.log.Error("Error retriving data about Twitter mappings from Twitter: %s!", err.Error())
 			continue
 		}
@@ -95,7 +99,9 @@ func (w *Watcher) resolve(x context.Context, a bool) {
 			if stringLowMatch(v, l[x].Name) {
 				l[x].Twitter = k
 				w.log.Trace(`Twitter username %q (db: %s) was resolved to "%d".`, v, l[x].Name, k)
-			} else if l[x].Twitter == k && !stringLowMatch(v, l[x].Name) {
+				continue
+			}
+			if l[x].Twitter == k && !stringLowMatch(v, l[x].Name) {
 				l[x].New = v
 				w.log.Warning(`Found new name for ID "%d": %s => %s!`, k, l[x].Name, l[x].New)
 			}
@@ -209,15 +215,15 @@ func (w *Watcher) watch(x context.Context, g *sync.WaitGroup, c chan uint8, o ch
 					return
 				}
 				if t.Retweeted || t.RetweetedStatus != nil {
-					w.log.Debug("Tweet \"twitter.com/%s/status/%s\" is a a retweet, skipping it!", t.User.ScreenName, t.IDStr)
+					w.log.Debug(`Tweet "twitter.com/%s/status/%s" is a a retweet, skipping it!`, t.User.ScreenName, t.IDStr)
 					break
 				}
 				if t.Text[0] == '@' || t.Retweeted || t.RetweetedStatus != nil {
-					w.log.Debug("Tweet \"twitter.com/%s/status/%s\" is a direct reply, skipping it!", t.User.ScreenName, t.IDStr)
+					w.log.Debug(`Tweet "twitter.com/%s/status/%s" is a direct reply, skipping it!`, t.User.ScreenName, t.IDStr)
 					break
 				}
 				if t.WithheldScope = ""; len(t.QuotedStatusIDStr) != 0 || len(t.InReplyToStatusIDStr) != 0 {
-					w.log.Debug("Tweet \"twitter.com/%s/status/%s\" is a quoted retweet skipping it!", t.User.ScreenName, t.IDStr)
+					w.log.Debug(`Tweet "twitter.com/%s/status/%s" is a quoted retweet skipping it!`, t.User.ScreenName, t.IDStr)
 					break
 				}
 				o <- t
@@ -342,7 +348,7 @@ func (w *Watcher) mentions(x context.Context, g *sync.WaitGroup, i *notifier, o 
 					t.IDStr, len(t.Text) > 0 && t.Text[0] == '@', t.Retweeted || t.RetweetedStatus != nil, len(t.Text), len(t.FullText),
 					len(t.QuotedStatusIDStr) > 0 || len(t.InReplyToStatusIDStr) > 0, t.User.ScreenName, t.User.ScreenName, t.IDStr,
 				)
-				w.log.Debug("Received mention \"twitter.com/%s/status/%s\", sending to %d!", t.User.ScreenName, t.IDStr, i.chat)
+				w.log.Debug(`Received mention "twitter.com/%s/status/%s", sending to %d!`, t.User.ScreenName, t.IDStr, i.chat)
 				t.WithheldScope = "mention"
 				o <- t
 			case *twitter.Event:

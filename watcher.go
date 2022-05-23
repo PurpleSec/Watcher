@@ -135,9 +135,9 @@ func New(s string, empty, update bool) (*Watcher, error) {
 	}
 	l := logx.Multiple(logx.Console(logx.Level(c.Log.Level)))
 	if len(c.Log.File) > 0 {
-		f, err2 := logx.File(c.Log.File, logx.Append, logx.Level(c.Log.Level))
-		if err2 != nil {
-			return nil, errors.New(`setting up log file "` + c.Log.File + `": ` + err2.Error())
+		var f logx.Log
+		if f, err = logx.File(c.Log.File, logx.Append, logx.Level(c.Log.Level)); err != nil {
+			return nil, errors.New(`setting up log file "` + c.Log.File + `": ` + err.Error())
 		}
 		l.Add(f)
 	}
@@ -182,6 +182,7 @@ func New(s string, empty, update bool) (*Watcher, error) {
 		return nil, errors.New(`database connection "` + c.Database.Server + `": ` + err.Error())
 	}
 	if err = d.Ping(); err != nil {
+		d.Close()
 		return nil, errors.New(`database connection "` + c.Database.Server + `": ` + err.Error())
 	}
 	m := mapper.New(d)

@@ -106,13 +106,13 @@ func (w *Watcher) tweet(x context.Context, m chan<- message, t *twitter.Tweet) {
 		if c == 0 {
 			continue
 		}
-		w.log.Trace("Received Tweet \"twitter.com/%s/status/%s\", match on Chat %d (Keywords: %t).", t.User.ScreenName, t.IDStr, c, k.Valid)
+		w.log.Trace(`Received Tweet "twitter.com/%s/status/%s", match on Chat %d (Keywords: %t).`, t.User.ScreenName, t.IDStr, c, k.Valid)
 		if !k.Valid || (k.Valid && stringSplitContainsNLA(v, k.String)) {
-			w.log.Trace("Sending Telegram update for Tweet \"twitter.com/%s/status/%s\" to chat %d..", t.User.ScreenName, t.IDStr, c)
+			w.log.Trace(`Sending Telegram update for Tweet "twitter.com/%s/status/%s" to chat %d..`, t.User.ScreenName, t.IDStr, c)
 			m <- message{tries: 2, msg: telegram.NewMessage(c, s)}
 			continue
 		}
-		w.log.Trace("Skipping Telegram update for Tweet \"twitter.com/%s/status/%s\" to %d as it does not match keywords!", t.User.ScreenName, t.IDStr, c)
+		w.log.Trace(`Skipping Telegram update for Tweet "twitter.com/%s/status/%s" to %d as it does not match keywords!`, t.User.ScreenName, t.IDStr, c)
 	}
 	r.Close()
 }
@@ -211,11 +211,11 @@ func (w *Watcher) send(x context.Context, g *sync.WaitGroup, m chan message, t <
 	for g.Add(1); ; {
 		select {
 		case n := <-t:
-			if w.log.Debug("Received Tweet \"twitter.com/%s/status/%s\"..", n.User.ScreenName, n.IDStr); n.WithheldScope == "mention" {
+			if w.log.Debug(`Received Tweet "twitter.com/%s/status/%s"..`, n.User.ScreenName, n.IDStr); n.WithheldScope == "mention" {
 				if w.notifier == nil {
 					break
 				}
-				w.log.Debug("Tweet \"twitter.com/%s/%s\" is a mention for %d..", n.User.ScreenName, n.IDStr, w.notifier.chat)
+				w.log.Debug(`Tweet "twitter.com/%s/%s" is a mention for %d..`, n.User.ScreenName, n.IDStr, w.notifier.chat)
 				m <- message{
 					msg: telegram.NewMessage(
 						w.notifier.chat, "Mention from @"+n.User.ScreenName+"!\n\n"+n.Text+"\n\nhttps://twitter.com/"+n.User.ScreenName+"/status/"+n.IDStr,
