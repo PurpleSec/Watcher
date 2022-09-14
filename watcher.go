@@ -36,7 +36,7 @@ import (
 	telegram "github.com/go-telegram-bot-api/telegram-bot-api"
 )
 
-// Watcher is a struct that is used to manage the threads and proceses used to
+// Watcher is a struct that is used to manage the threads and processes used to
 // control and operate the Telegram Watcher bot service.
 type Watcher struct {
 	log      logx.Log

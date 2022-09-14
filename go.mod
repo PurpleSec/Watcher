@@ -3,8 +3,8 @@ module github.com/PurpleSec/watcher
 go 1.17
 
 require (
-	github.com/PurpleSec/logx v1.6.0
-	github.com/PurpleSec/mapper v1.6.0
+	github.com/PurpleSec/logx v1.6.1
+	github.com/PurpleSec/mapper v1.6.1
 	github.com/dghubble/go-twitter v0.0.0-20220816163853-8a0df96f1e6d
 	github.com/dghubble/oauth1 v0.7.1
 	github.com/go-sql-driver/mysql v1.6.0

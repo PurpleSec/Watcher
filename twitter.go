@@ -84,7 +84,7 @@ func (w *Watcher) resolve(x context.Context, a bool) {
 			p = append(p, v.Twitter)
 		}
 		if q, _, err = w.twitter.Users.Lookup(&twitter.UserLookupParams{UserID: p, ScreenName: n}); err != nil {
-			w.log.Error("Error retriving data about Twitter mappings from Twitter: %s!", err.Error())
+			w.log.Error("Error retrieving data about Twitter mappings from Twitter: %s!", err.Error())
 			continue
 		}
 		for v := range q {

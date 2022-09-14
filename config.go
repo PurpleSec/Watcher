@@ -212,7 +212,7 @@ func stringSplitContainsNLA(s, m string) bool {
 	// NOTE(dij): This is to see if we have a valid minus char '-' next to a
 	//            comma as this indicates that we need to validate it.
 	n := strings.IndexByte(m, '-')
-	// NOTE(dij): Loop through to see for valid's.
+	// NOTE(dij): Loop through to see for valids.
 	//            If the '-' is at 0 or non-exist, skip this.
 	for n > 0 && n < len(m) {
 		if m[n-1] == ',' {
@@ -227,7 +227,7 @@ func stringSplitContainsNLA(s, m string) bool {
 		if e == -1 {
 			// NOTE(dij): Last (or only) entry.
 			if m[i] == '-' && i+1 < len(m) {
-				// NOTE(dij): Found negative, takes precident.
+				// NOTE(dij): Found negative, takes president.
 				if !strings.Contains(s, m[i+1:]) {
 					// NOTE(dij): If i == 0, the we're the only, we can rely
 					//            on this being true.
@@ -242,7 +242,7 @@ func stringSplitContainsNLA(s, m string) bool {
 			if (m[i] == '+' || m[i] == '\\') && i+1 < len(m) {
 				i++
 			}
-			// NOTE(dij): Only one here, since its the last value, non-negative.
+			// NOTE(dij): Only one here, since it's the last value, non-negative.
 			//            means everything else /must/ have passed
 			return strings.Contains(s, m[i:])
 		}

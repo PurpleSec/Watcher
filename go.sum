@@ -1,7 +1,11 @@
 github.com/PurpleSec/logx v1.6.0 h1:Izt49BihGlDDPjWYccIbFTVoKfjS53Uv6hDvp9rd4bE=
 github.com/PurpleSec/logx v1.6.0/go.mod h1:tkLK6CqkhkRSVejDMVgZa0jTq97aRikVNjAON9iUiK0=
+github.com/PurpleSec/logx v1.6.1 h1:0MCHXb1N9RREkg6FAQB624bkzzl/irlVcVV5DVMRAgo=
+github.com/PurpleSec/logx v1.6.1/go.mod h1:tkLK6CqkhkRSVejDMVgZa0jTq97aRikVNjAON9iUiK0=
 github.com/PurpleSec/mapper v1.6.0 h1:5pi7/KmwWGKFl9KWlUKxe6GT1x9EDROEHvf/QVbmmEc=
 github.com/PurpleSec/mapper v1.6.0/go.mod h1:JG1Dz4MqBCLDqTLp+k9l9eDLEGU3Ed16iFpzx5yb3oI=
+github.com/PurpleSec/mapper v1.6.1 h1:VGgNLnVn2f98czUH+wWxjLjxekJ07pcFI1GOZOdBPpo=
+github.com/PurpleSec/mapper v1.6.1/go.mod h1:QjfHBbW6bdCFHZ4tDI7i+pgTYfl8vyr60bmwxhuyDGs=
 github.com/cenkalti/backoff/v4 v4.1.3 h1:cFAlzYUlVYDysBEH2T5hyJZMh3+5+WCBvSnK6Q8UtC4=
 github.com/cenkalti/backoff/v4 v4.1.3/go.mod h1:scbssz8iZGpm3xbr14ovlUdkxfGXNInqkPWOWmG2CLw=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
