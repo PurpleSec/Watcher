@@ -32,6 +32,7 @@ const (
 )
 
 type mapping struct {
+	_           [0]func()
 	New, Name   string
 	ID, Twitter int64
 }
@@ -199,7 +200,7 @@ func (w *Watcher) watch(x context.Context, g *sync.WaitGroup, c chan uint8, o ch
 			}
 			i = -1
 			w.log.Debug("Drop complete, I can now accept more requests.")
-		case n := <-r:
+		case n, ok := <-r:
 			switch t := n.(type) {
 			case *twitter.Tweet:
 				if t.ExtendedTweet != nil && len(t.ExtendedTweet.FullText) > 0 {
@@ -241,19 +242,27 @@ func (w *Watcher) watch(x context.Context, g *sync.WaitGroup, c chan uint8, o ch
 			case *twitter.StreamDisconnect:
 				w.log.Error("Twitter stream thread received a StreamDisconnect message: %s!", t.Reason)
 				w.log.Info("Waiting %s before retrying...", pause.String())
-				time.Sleep(pause)
-				d = false // Remove any backoffs beforehand, since they don't matter,
-				c <- 0
+				if time.Sleep(pause); len(c) == 0 {
+					d = false // Remove any backoffs beforehand, since they don't matter,
+					c <- 0
+				}
 				w.log.Info("Wait complete, retrying!")
 			case *url.Error:
 				w.log.Error("Twitter stream thread received an error: %s!", t.Error())
 				w.log.Info("Waiting %s before retrying...", pause.String())
-				time.Sleep(pause)
-				d = false // Remove any backoffs beforehand, since they don't matter,
-				c <- 0
+				if time.Sleep(pause); len(c) == 0 {
+					d = false // Remove any backoffs beforehand, since they don't matter,
+					c <- 0
+				}
 				w.log.Info("Wait complete, retrying!")
 			default:
-				if t != nil {
+				if !ok {
+					w.log.Warning("Twitter stream thread received a channel closure, attempting to reload!")
+					if time.Sleep(pause); len(c) == 0 {
+						d = false // Remove any backoffs beforehand, since they don't matter,
+						c <- 0
+					}
+				} else if t != nil {
 					w.log.Warning("Twitter stream thread received an unrecognized message (%T): %s\n", t, t)
 				}
 			}
