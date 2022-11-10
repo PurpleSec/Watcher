@@ -228,13 +228,7 @@ func (w *Watcher) watch(x context.Context, g *sync.WaitGroup, c chan uint8, o ch
 					break
 				}
 				o <- t
-			case *twitter.Event:
-			case *twitter.FriendsList:
-			case *twitter.UserWithheld:
-			case *twitter.DirectMessage:
-			case *twitter.StatusDeletion:
-			case *twitter.StatusWithheld:
-			case *twitter.LocationDeletion:
+			case *twitter.Event, *twitter.FriendsList, *twitter.UserWithheld, *twitter.DirectMessage, *twitter.StatusDeletion, *twitter.StatusWithheld, *twitter.LocationDeletion:
 			case *twitter.StreamLimit:
 				w.log.Warning("Twitter stream thread received a StreamLimit message of %d!", t.Track)
 			case *twitter.StallWarning:
@@ -346,7 +340,7 @@ func (w *Watcher) mentions(x context.Context, g *sync.WaitGroup, i *notifier, o 
 	w.log.Info("Starting Twitter mentions thread..")
 	for g.Add(1); ; {
 		select {
-		case n := <-s.Messages:
+		case n, ok := <-s.Messages:
 			switch t := n.(type) {
 			case *twitter.Tweet:
 				if t.ExtendedTweet != nil && len(t.ExtendedTweet.FullText) > 0 {
@@ -360,13 +354,7 @@ func (w *Watcher) mentions(x context.Context, g *sync.WaitGroup, i *notifier, o 
 				w.log.Debug(`Received mention "twitter.com/%s/status/%s", sending to %d!`, t.User.ScreenName, t.IDStr, i.chat)
 				t.WithheldScope = "mention"
 				o <- t
-			case *twitter.Event:
-			case *twitter.FriendsList:
-			case *twitter.UserWithheld:
-			case *twitter.DirectMessage:
-			case *twitter.StatusDeletion:
-			case *twitter.StatusWithheld:
-			case *twitter.LocationDeletion:
+			case *twitter.Event, *twitter.FriendsList, *twitter.UserWithheld, *twitter.DirectMessage, *twitter.StatusDeletion, *twitter.StatusWithheld, *twitter.LocationDeletion:
 			case *twitter.StreamLimit:
 				w.log.Warning("Twitter mention thread received a StreamLimit message of %d!", t.Track)
 			case *twitter.StallWarning:
@@ -386,7 +374,11 @@ func (w *Watcher) mentions(x context.Context, g *sync.WaitGroup, i *notifier, o 
 				g.Done()
 				return
 			default:
-				if t != nil {
+				if !ok {
+					w.log.Warning("Twitter mention thread received a channel closure, attempting to reload!")
+					s.Stop()
+					g.Done()
+				} else if t != nil {
 					w.log.Warning("Twitter mention thread received an unrecognized message (%T): %s\n", t, t)
 				}
 			}
