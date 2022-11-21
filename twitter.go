@@ -216,7 +216,7 @@ func (w *Watcher) watch(x context.Context, g *sync.WaitGroup, c chan uint8, o ch
 					return
 				}
 				if t.Retweeted || t.RetweetedStatus != nil {
-					w.log.Debug(`Tweet "twitter.com/%s/status/%s" is a a retweet, skipping it!`, t.User.ScreenName, t.IDStr)
+					w.log.Debug(`Tweet "twitter.com/%s/status/%s" is a retweet, skipping it!`, t.User.ScreenName, t.IDStr)
 					break
 				}
 				if t.Text[0] == '@' || t.InReplyToStatusID != 0 {
