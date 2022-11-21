@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/PurpleSec/logx v1.6.1
-	github.com/PurpleSec/mapper v1.6.1
+	github.com/PurpleSec/mapper v1.6.2
 	github.com/dghubble/go-twitter v0.0.0-20221104224141-912508c3888b
 	github.com/dghubble/oauth1 v0.7.1
 	github.com/go-sql-driver/mysql v1.6.0
