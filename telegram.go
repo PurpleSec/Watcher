@@ -108,7 +108,7 @@ func (w *Watcher) tweet(x context.Context, m chan<- message, t *twitter.Tweet) {
 		}
 		w.log.Trace(`Received Tweet "twitter.com/%s/status/%s", match on Chat %d (Keywords: %t).`, t.User.ScreenName, t.IDStr, c, k.Valid)
 		if !k.Valid || (k.Valid && stringSplitContainsNLA(v, k.String)) {
-			w.log.Trace(`Sending Telegram update for Tweet "twitter.com/%s/status/%s" to chat %d..`, t.User.ScreenName, t.IDStr, c)
+			w.log.Debug(`Sending Telegram update for Tweet "twitter.com/%s/status/%s" to chat %d..`, t.User.ScreenName, t.IDStr, c)
 			m <- message{tries: 2, msg: telegram.NewMessage(c, s)}
 			continue
 		}
@@ -211,19 +211,6 @@ func (w *Watcher) send(x context.Context, g *sync.WaitGroup, m chan message, t <
 	for g.Add(1); ; {
 		select {
 		case n := <-t:
-			if w.log.Debug(`Received Tweet "twitter.com/%s/status/%s"..`, n.User.ScreenName, n.IDStr); n.WithheldScope == "mention" {
-				if w.notifier == nil {
-					break
-				}
-				w.log.Debug(`Tweet "twitter.com/%s/%s" is a mention for %d..`, n.User.ScreenName, n.IDStr, w.notifier.chat)
-				m <- message{
-					msg: telegram.NewMessage(
-						w.notifier.chat, "Mention from @"+n.User.ScreenName+"!\n\n"+n.Text+"\n\nhttps://twitter.com/"+n.User.ScreenName+"/status/"+n.IDStr,
-					),
-					tries: 2,
-				}
-				break
-			}
 			w.tweet(x, m, n)
 		case n := <-m:
 			_, err := w.bot.Send(n.msg)

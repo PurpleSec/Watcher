@@ -85,20 +85,10 @@ type config struct {
 		Username string `json:"user"`
 		Password string `json:"password"`
 	} `json:"db"`
-	Telegram string `json:"telegram_key"`
-	Mentions struct {
-		Twitter struct {
-			AccessKey      string `json:"access_key"`
-			ConsumerKey    string `json:"consumer_key"`
-			AccessSecret   string `json:"access_secret"`
-			ConsumerSecret string `json:"consumer_secret"`
-		} `json:"auth"`
-		Keywords string `json:"keywords"`
-		Receiver int64  `json:"chat"`
-	} `json:"mentions"`
-	Blocked []string `json:"blocked"`
-	Allowed []string `json:"allowed"`
-	Log     struct {
+	Telegram string   `json:"telegram_key"`
+	Blocked  []string `json:"blocked"`
+	Allowed  []string `json:"allowed"`
+	Log      struct {
 		File  string `json:"file"`
 		Level int    `json:"level"`
 	} `json:"log"`

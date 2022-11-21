@@ -23,7 +23,6 @@ import (
 	"errors"
 	"os"
 	"os/signal"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -39,27 +38,21 @@ import (
 // Watcher is a struct that is used to manage the threads and processes used to
 // control and operate the Telegram Watcher bot service.
 type Watcher struct {
-	log      logx.Log
-	err      error
-	sql      *mapper.Map
-	bot      *telegram.BotAPI
-	tick     *time.Ticker
-	cancel   context.CancelFunc
-	twitter  *twitter.Client
-	confirm  map[int64]struct{}
-	notifier *notifier
-	allowed  []string
-	blocked  []string
-	backoff  time.Duration
+	log     logx.Log
+	err     error
+	sql     *mapper.Map
+	bot     *telegram.BotAPI
+	tick    *time.Ticker
+	cancel  context.CancelFunc
+	twitter *twitter.Client
+	confirm map[int64]struct{}
+	allowed []string
+	blocked []string
+	backoff time.Duration
 }
 type message struct {
 	msg   telegram.MessageConfig
 	tries uint8
-}
-type notifier struct {
-	client   *twitter.Client
-	keywords []string
-	chat     int64
 }
 
 // Run will start the main Watcher process and all associated threads.
@@ -87,7 +80,6 @@ func (w *Watcher) Run() error {
 	go w.send(x, &g, m, t)
 	go w.watch(x, &g, c, t)
 	go w.receive(x, &g, m, r, c)
-	go w.mentions(x, &g, w.notifier, t)
 	for {
 		select {
 		case <-s:
@@ -150,26 +142,6 @@ func New(s string, empty, update bool) (*Watcher, error) {
 	if _, _, err = t.Accounts.VerifyCredentials(nil); err != nil {
 		return nil, errors.New("twitter login: " + err.Error())
 	}
-	var y *notifier
-	if c.Mentions.Receiver != 0 && len(c.Mentions.Keywords) > 0 {
-		y = &notifier{chat: c.Mentions.Receiver}
-		if len(c.Mentions.Twitter.AccessKey) > 0 && len(c.Mentions.Twitter.AccessSecret) > 0 && len(c.Mentions.Twitter.ConsumerKey) > 0 && len(c.Mentions.Twitter.ConsumerSecret) > 0 {
-			y.client = twitter.NewClient(
-				oauth1.NewConfig(c.Twitter.ConsumerKey, c.Twitter.ConsumerSecret).Client(
-					context.Background(), oauth1.NewToken(c.Twitter.AccessKey, c.Twitter.AccessSecret),
-				),
-			)
-			if _, _, err = y.client.Accounts.VerifyCredentials(nil); err != nil {
-				return nil, errors.New("twitter mention login: " + err.Error())
-			}
-		}
-		for _, k := range strings.Split(c.Mentions.Keywords, ",") {
-			y.keywords = append(y.keywords, strings.TrimSpace(k))
-		}
-		if len(y.keywords) == 0 {
-			y = nil
-		}
-	}
 	b, err := telegram.NewBotAPI(c.Telegram)
 	if err != nil {
 		return nil, errors.New("telegram login: " + err.Error())
@@ -207,15 +179,14 @@ func New(s string, empty, update bool) (*Watcher, error) {
 		return nil, errors.New("setup database schema: " + err.Error())
 	}
 	return &Watcher{
-		sql:      m,
-		bot:      b,
-		log:      l,
-		tick:     time.NewTicker(c.Timeouts.Resolve),
-		twitter:  t,
-		backoff:  c.Timeouts.Backoff,
-		allowed:  c.Allowed,
-		blocked:  c.Blocked,
-		confirm:  make(map[int64]struct{}),
-		notifier: y,
+		sql:     m,
+		bot:     b,
+		log:     l,
+		tick:    time.NewTicker(c.Timeouts.Resolve),
+		twitter: t,
+		backoff: c.Timeouts.Backoff,
+		allowed: c.Allowed,
+		blocked: c.Blocked,
+		confirm: make(map[int64]struct{}),
 	}, nil
 }

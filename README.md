@@ -2,7 +2,8 @@
 
 Golang Twitter Notification Bot for Telegram
 
-This is a bot for Telegram written in Golang, backed by a SQL database that is used for subscribing to user Tweets.
+This is a bot for Telegram written in Golang, backed by a SQL database that is
+used for subscribing to user Tweets.
 
 ## Command Line Options
 

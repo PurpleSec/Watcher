@@ -90,7 +90,7 @@ func (w *Watcher) resolve(x context.Context, a bool) {
 		}
 		for v := range q {
 			if _, ok := i[q[v].ID]; ok {
-				w.log.Warning("Duplicate ID value %q detected with username %q!", q[v].IDStr, q[v].ScreenName)
+				w.log.Warning(`Duplicate ID value "%s" detected with username "%s"!`, q[v].IDStr, q[v].ScreenName)
 			}
 			i[q[v].ID] = q[v].ScreenName
 		}
@@ -99,7 +99,7 @@ func (w *Watcher) resolve(x context.Context, a bool) {
 		for x := range l {
 			if stringLowMatch(v, l[x].Name) {
 				l[x].Twitter = k
-				w.log.Trace(`Twitter username %q (db: %s) was resolved to "%d".`, v, l[x].Name, k)
+				w.log.Trace(`Twitter username %s (db: %s) was resolved to "%d".`, v, l[x].Name, k)
 				continue
 			}
 			if l[x].Twitter == k && !stringLowMatch(v, l[x].Name) {
@@ -119,7 +119,7 @@ func (w *Watcher) resolve(x context.Context, a bool) {
 			continue
 		}
 	}
-	w.log.Info("Completed Twitter ID mapping resolve task!")
+	w.log.Debug("Completed Twitter ID mapping resolve task!")
 }
 func (w *Watcher) stream(x context.Context, f bool, a bool) (*twitter.StreamFilterParams, error) {
 	if f {
@@ -207,23 +207,23 @@ func (w *Watcher) watch(x context.Context, g *sync.WaitGroup, c chan uint8, o ch
 					t.FullText = t.ExtendedTweet.FullText
 				}
 				w.log.Trace(
-					"Tweet %q received! Details [Reply? %t, Retweet? %t, Size? %d, Full? %d, Quoted? %t, User? %s, URL? https://twitter.com/%s/status/%s]",
+					`Tweet "%s" received! Details [Reply? %t, Retweet? %t, Size? %d, Full? %d, Quoted? %t, User? %s, URL? https://twitter.com/%s/status/%s]`,
 					t.IDStr, len(t.Text) > 0 && t.Text[0] == '@', t.Retweeted || t.RetweetedStatus != nil, len(t.Text), len(t.FullText),
 					len(t.QuotedStatusIDStr) > 0 || len(t.InReplyToStatusIDStr) > 0, t.User.ScreenName, t.User.ScreenName, t.IDStr,
 				)
 				if len(t.Text) == 0 && len(t.FullText) == 0 {
-					w.log.Debug("Tweet \"twitter.com/%s/status/%s\" is empty or just an image, skipping it!", t.User.ScreenName, t.IDStr)
+					w.log.Debug(`Tweet "twitter.com/%s/status/%s" is empty or just an image, skipping it!`, t.User.ScreenName, t.IDStr)
 					return
 				}
 				if t.Retweeted || t.RetweetedStatus != nil {
 					w.log.Debug(`Tweet "twitter.com/%s/status/%s" is a a retweet, skipping it!`, t.User.ScreenName, t.IDStr)
 					break
 				}
-				if t.Text[0] == '@' || t.Retweeted || t.RetweetedStatus != nil {
+				if t.Text[0] == '@' || t.InReplyToStatusID != 0 {
 					w.log.Debug(`Tweet "twitter.com/%s/status/%s" is a direct reply, skipping it!`, t.User.ScreenName, t.IDStr)
 					break
 				}
-				if t.WithheldScope = ""; len(t.QuotedStatusIDStr) != 0 || len(t.InReplyToStatusIDStr) != 0 {
+				if t.QuotedStatusID != 0 && t.QuotedStatus != nil && t.QuotedStatus.User.ID != t.User.ID {
 					w.log.Debug(`Tweet "twitter.com/%s/status/%s" is a quoted retweet skipping it!`, t.User.ScreenName, t.IDStr)
 					break
 				}
@@ -240,7 +240,7 @@ func (w *Watcher) watch(x context.Context, g *sync.WaitGroup, c chan uint8, o ch
 					d = false // Remove any backoffs beforehand, since they don't matter,
 					c <- 0
 				}
-				w.log.Info("Wait complete, retrying!")
+				w.log.Debug("Wait complete, retrying!")
 			case *url.Error:
 				w.log.Error("Twitter stream thread received an error: %s!", t.Error())
 				w.log.Info("Waiting %s before retrying...", pause.String())
@@ -248,7 +248,7 @@ func (w *Watcher) watch(x context.Context, g *sync.WaitGroup, c chan uint8, o ch
 					d = false // Remove any backoffs beforehand, since they don't matter,
 					c <- 0
 				}
-				w.log.Info("Wait complete, retrying!")
+				w.log.Debug("Wait complete, retrying!")
 			default:
 				if !ok {
 					w.log.Warning("Twitter stream thread received a channel closure, attempting to reload!")
@@ -302,89 +302,6 @@ func (w *Watcher) watch(x context.Context, g *sync.WaitGroup, c chan uint8, o ch
 				s.Stop()
 			}
 			close(z)
-			g.Done()
-			return
-		}
-	}
-}
-func (w *Watcher) mentions(x context.Context, g *sync.WaitGroup, i *notifier, o chan<- *twitter.Tweet) {
-	if i == nil {
-		w.log.Info("Mentions config is empty, not starting mentions thread.")
-		return
-	}
-	var s *twitter.Stream
-	if i.client != nil {
-		w.log.Debug("Mention stream using secondary stream mode..")
-		s, w.err = i.client.Streams.Filter(&twitter.StreamFilterParams{
-			Track:         i.keywords,
-			Language:      []string{"en"},
-			FilterLevel:   "none",
-			StallWarnings: twitter.Bool(true),
-		})
-	} else {
-		w.log.Debug("Mention stream using User mode..")
-		s, w.err = w.twitter.Streams.User(&twitter.StreamUserParams{
-			With:          "followings",
-			Track:         i.keywords,
-			Replies:       "all",
-			Language:      []string{"en"},
-			FilterLevel:   "none",
-			StallWarnings: twitter.Bool(true),
-		})
-	}
-	if w.err != nil {
-		w.log.Error("Error creating initial Twitter mention stream: %s!", w.err.Error())
-		w.cancel()
-		return
-	}
-	w.log.Info("Starting Twitter mentions thread..")
-	for g.Add(1); ; {
-		select {
-		case n, ok := <-s.Messages:
-			switch t := n.(type) {
-			case *twitter.Tweet:
-				if t.ExtendedTweet != nil && len(t.ExtendedTweet.FullText) > 0 {
-					t.FullText = t.ExtendedTweet.FullText
-				}
-				w.log.Trace(
-					"Tweet %q received! Details [Reply? %t, Retweet? %t, Size? %d, Full? %d, Quoted? %t, User? %s, URL? https://twitter.com/%s/status/%s]",
-					t.IDStr, len(t.Text) > 0 && t.Text[0] == '@', t.Retweeted || t.RetweetedStatus != nil, len(t.Text), len(t.FullText),
-					len(t.QuotedStatusIDStr) > 0 || len(t.InReplyToStatusIDStr) > 0, t.User.ScreenName, t.User.ScreenName, t.IDStr,
-				)
-				w.log.Debug(`Received mention "twitter.com/%s/status/%s", sending to %d!`, t.User.ScreenName, t.IDStr, i.chat)
-				t.WithheldScope = "mention"
-				o <- t
-			case *twitter.Event, *twitter.FriendsList, *twitter.UserWithheld, *twitter.DirectMessage, *twitter.StatusDeletion, *twitter.StatusWithheld, *twitter.LocationDeletion:
-			case *twitter.StreamLimit:
-				w.log.Warning("Twitter mention thread received a StreamLimit message of %d!", t.Track)
-			case *twitter.StallWarning:
-				w.log.Warning("Twitter mention thread received a StallWarning message: %s!", t.Message)
-			case *twitter.StreamDisconnect:
-				w.log.Error("Twitter mention thread received a StreamDisconnect message: %s!", t.Reason)
-				// w.err = &errval{s: "received StreamDisconnect: " + t.Reason}
-				// I don't think we should close on mention thread errors.
-				s.Stop()
-				g.Done()
-				return
-			case *url.Error:
-				w.log.Error("Twitter mention thread received an error: %s!", t.Error())
-				// w.err = t.Err
-				// same as above
-				s.Stop()
-				g.Done()
-				return
-			default:
-				if !ok {
-					w.log.Warning("Twitter mention thread received a channel closure, attempting to reload!")
-					s.Stop()
-					g.Done()
-				} else if t != nil {
-					w.log.Warning("Twitter mention thread received an unrecognized message (%T): %s\n", t, t)
-				}
-			}
-		case <-x.Done():
-			w.log.Info("Stopping Twitter mention thread.")
-			s.Stop()
 			g.Done()
 			return
 		}
