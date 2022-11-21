@@ -235,7 +235,7 @@ func (w *Watcher) watch(x context.Context, g *sync.WaitGroup, c chan uint8, o ch
 				w.log.Warning("Twitter stream thread received a StallWarning message: %s!", t.Message)
 			case *twitter.StreamDisconnect:
 				w.log.Error("Twitter stream thread received a StreamDisconnect message: %s!", t.Reason)
-				w.log.Info("Waiting %s before retrying...", pause.String())
+				w.log.Info("Waiting %s before retrying..", pause.String())
 				if time.Sleep(pause); len(c) == 0 {
 					d = false // Remove any backoffs beforehand, since they don't matter,
 					c <- 0
@@ -243,7 +243,7 @@ func (w *Watcher) watch(x context.Context, g *sync.WaitGroup, c chan uint8, o ch
 				w.log.Debug("Wait complete, retrying!")
 			case *url.Error:
 				w.log.Error("Twitter stream thread received an error: %s!", t.Error())
-				w.log.Info("Waiting %s before retrying...", pause.String())
+				w.log.Info("Waiting %s before retrying..", pause.String())
 				if time.Sleep(pause); len(c) == 0 {
 					d = false // Remove any backoffs beforehand, since they don't matter,
 					c <- 0
