@@ -32,6 +32,7 @@ Purple Security (losynth.com/purple) 2021 - 2023
 
 Usage:
   -h              Print this help menu.
+  -V              Print version string and exit.
   -f <file>       Configuration file path.
   -d              Dump the default configuration and exit.
   -clear-all      Clear the database of ALL DATA before starting up.
