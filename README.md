@@ -9,7 +9,7 @@ used for subscribing to user Tweets.
 
 ```[text]
 Twitter Watcher Telegram Bot
-Purple Security (losynth.com/purple) 2021 - 2022
+Purple Security (losynth.com/purple) 2021 - 2023
 
 Usage:
   -h              Print this help menu.

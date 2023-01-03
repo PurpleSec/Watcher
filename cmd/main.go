@@ -1,4 +1,4 @@
-// Copyright 2021 - 2022 PurpleSec Team
+// Copyright 2021 - 2023 PurpleSec Team
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Affero General Public License as published
@@ -23,10 +23,12 @@ import (
 	"github.com/PurpleSec/watcher"
 )
 
-const version = "v1.2.0"
+var buildVersion = "unknown"
+
+const version = "v1.3.0"
 
 const usage = `Twitter Watcher Telegram Bot ` + version + `
-Purple Security (losynth.com/purple) 2021 - 2022
+Purple Security (losynth.com/purple) 2021 - 2023
 
 Usage:
   -h              Print this help menu.
@@ -38,22 +40,28 @@ Usage:
 
 func main() {
 	var (
-		args                = flag.NewFlagSet("Twitter Watcher Telegram Bot "+version, flag.ExitOnError)
-		file                string
-		dump, empty, update bool
+		args                     = flag.NewFlagSet("Twitter Watcher Telegram Bot "+version+"_"+buildVersion, flag.ExitOnError)
+		file                     string
+		dump, empty, update, ver bool
 	)
 	args.Usage = func() {
 		os.Stderr.WriteString(usage)
 		os.Exit(2)
 	}
-	args.StringVar(&file, "f", "", "Configuration file path.")
-	args.BoolVar(&dump, "d", false, "Dump the default configuration and exit.")
-	args.BoolVar(&empty, "clear-all", false, "Clear the database of ALL DATA before starting up.")
-	args.BoolVar(&update, "update", false, "Update the database schema to the latest version.")
+	args.StringVar(&file, "f", "", "")
+	args.BoolVar(&dump, "d", false, "")
+	args.BoolVar(&ver, "V", false, "")
+	args.BoolVar(&empty, "clear-all", false, "")
+	args.BoolVar(&update, "update", false, "")
 
 	if err := args.Parse(os.Args[1:]); err != nil {
 		os.Stderr.WriteString(usage)
 		os.Exit(2)
+	}
+
+	if ver {
+		os.Stdout.WriteString("Watcher: " + version + "_" + buildVersion + "\n")
+		os.Exit(0)
 	}
 
 	if len(file) == 0 && !dump {
