@@ -38,9 +38,7 @@ The default config can be dumped to Stdout using the '-d' command line flag.
     "blocked": [],
     "allowed": [],
     "twitter": {
-        "access_key": "",
         "consumer_key": "",
-        "access_secret": "",
         "consumer_secret": ""
     },
     "timeouts": {

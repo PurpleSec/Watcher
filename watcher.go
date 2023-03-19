@@ -21,6 +21,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"sync"
@@ -29,10 +31,9 @@ import (
 
 	"github.com/PurpleSec/logx"
 	"github.com/PurpleSec/mapper"
-	"github.com/dghubble/go-twitter/twitter"
-	"github.com/dghubble/oauth1"
 
-	telegram "github.com/go-telegram-bot-api/telegram-bot-api"
+	twitter "github.com/g8rswimmer/go-twitter/v2"
+	telegram "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 // Watcher is a struct that is used to manage the threads and processes used to
@@ -43,8 +44,9 @@ type Watcher struct {
 	sql     *mapper.Map
 	bot     *telegram.BotAPI
 	tick    *time.Ticker
+	auth    string
+	ck, cs  string
 	cancel  context.CancelFunc
-	twitter *twitter.Client
 	confirm map[int64]struct{}
 	allowed []string
 	blocked []string
@@ -61,16 +63,12 @@ type message struct {
 // also returns any errors that occur during shutdown.
 func (w *Watcher) Run() error {
 	telegram.SetLogger(w.log)
-	r, err := w.bot.GetUpdatesChan(telegram.UpdateConfig{})
-	if err != nil {
-		w.sql.Close()
-		return errors.New("could not get Telegram receiver: " + err.Error())
-	}
 	var (
+		r = w.bot.GetUpdatesChan(telegram.UpdateConfig{})
 		c = make(chan uint8, 64)
 		s = make(chan os.Signal, 1)
 		m = make(chan message, 256)
-		t = make(chan *twitter.Tweet, 256)
+		t = make(chan *twitter.TweetObj, 256)
 		x context.Context
 		g sync.WaitGroup
 	)
@@ -106,6 +104,14 @@ cleanup:
 	return w.err
 }
 
+// Add fulfils the Authenticator interface.
+func (w *Watcher) Add(r *http.Request) {
+	if len(w.auth) == 0 {
+		return
+	}
+	r.Header.Add("Authorization", "Bearer "+w.auth)
+}
+
 // New returns a new Watcher instance based on the passed config file path.
 //
 // This function will preform any setup steps needed to start the Watcher. Once
@@ -134,15 +140,17 @@ func New(s string, empty, update bool) (*Watcher, error) {
 		l.Add(f)
 	}
 	l.SetPrintLevel(logx.Error)
-	t := twitter.NewClient(
-		oauth1.NewConfig(c.Twitter.ConsumerKey, c.Twitter.ConsumerSecret).Client(
-			context.Background(), oauth1.NewToken(c.Twitter.AccessKey, c.Twitter.AccessSecret),
-		),
-	)
-	if _, _, err = t.Accounts.VerifyCredentials(nil); err != nil {
-		return nil, errors.New("twitter login: " + err.Error())
-	}
-	b, err := telegram.NewBotAPI(c.Telegram)
+	b, err := telegram.NewBotAPIWithClient(c.Telegram, telegram.APIEndpoint, &http.Client{Transport: &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           (&net.Dialer{Timeout: time.Second * 10, KeepAlive: time.Second * 30}).DialContext,
+		MaxIdleConns:          64,
+		IdleConnTimeout:       time.Second * 60,
+		DisableKeepAlives:     false,
+		ForceAttemptHTTP2:     true,
+		TLSHandshakeTimeout:   time.Second * 10,
+		ExpectContinueTimeout: time.Second * 10,
+		ResponseHeaderTimeout: time.Second * 10,
+	}})
 	if err != nil {
 		return nil, errors.New("telegram login: " + err.Error())
 	}
@@ -179,11 +187,12 @@ func New(s string, empty, update bool) (*Watcher, error) {
 		return nil, errors.New("setup database schema: " + err.Error())
 	}
 	return &Watcher{
+		ck:      c.Twitter.ConsumerKey,
+		cs:      c.Twitter.ConsumerSecret,
 		sql:     m,
 		bot:     b,
 		log:     l,
 		tick:    time.NewTicker(c.Timeouts.Resolve),
-		twitter: t,
 		backoff: c.Timeouts.Backoff,
 		allowed: c.Allowed,
 		blocked: c.Blocked,

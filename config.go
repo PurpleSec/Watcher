@@ -45,9 +45,7 @@ const Defaults = `{
 	"blocked": [],
 	"allowed": [],
 	"twitter": {
-		"access_key": "",
 		"consumer_key": "",
-		"access_secret": "",
 		"consumer_secret": ""
 	},
 	"timeouts": {
@@ -74,9 +72,7 @@ Please use a command from the following list:
 
 type config struct {
 	Twitter struct {
-		AccessKey      string `json:"access_key"`
 		ConsumerKey    string `json:"consumer_key"`
-		AccessSecret   string `json:"access_secret"`
 		ConsumerSecret string `json:"consumer_secret"`
 	} `json:"twitter"`
 	Database struct {
@@ -121,12 +117,6 @@ func isValid(s string) bool {
 	return true
 }
 func (c *config) check() error {
-	if len(c.Twitter.AccessKey) == 0 {
-		return errors.New("missing Twitter access key")
-	}
-	if len(c.Twitter.AccessSecret) == 0 {
-		return errors.New("missing Twitter access secret")
-	}
 	if len(c.Twitter.ConsumerKey) == 0 {
 		return errors.New("missing Twitter consumer key")
 	}

@@ -19,13 +19,13 @@ package watcher
 import (
 	"context"
 	"database/sql"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/dghubble/go-twitter/twitter"
-
-	telegram "github.com/go-telegram-bot-api/telegram-bot-api"
+	twitter "github.com/g8rswimmer/go-twitter/v2"
+	telegram "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 var builders = sync.Pool{
@@ -82,21 +82,21 @@ func (w *Watcher) list(x context.Context, i int64) string {
 	}
 	return s
 }
-func (w *Watcher) tweet(x context.Context, m chan<- message, t *twitter.Tweet) {
-	r, err := w.sql.QueryContext(x, "notify", t.User.ID)
+func (w *Watcher) tweet(x context.Context, m chan<- message, t *twitter.TweetObj) {
+	i, _ := strconv.ParseInt(t.AuthorID, 10, 64)
+	if i == 0 {
+		return
+	}
+	r, err := w.sql.QueryContext(x, "notify", i)
 	if err != nil {
 		w.log.Error("Error getting Twitter subscriptions from database: %s!", err.Error())
 		return
 	}
-	b := t.FullText
-	if len(b) == 0 {
-		b = t.Text
-	}
 	var (
 		c int64
 		k sql.NullString
-		v = strings.ToLower(b)
-		s = "Tweet from @" + t.User.ScreenName + "!\n\n" + b + "\n\nhttps://twitter.com/" + t.User.ScreenName + "/status/" + t.IDStr
+		v = strings.ToLower(t.Text)
+		s = "Tweet from @" + t.Source + "!\n\n" + t.Text + "\n\nhttps://twitter.com/" + t.Source + "/status/" + t.ID
 	)
 	for r.Next() {
 		if err := r.Scan(&c, &k); err != nil {
@@ -106,13 +106,13 @@ func (w *Watcher) tweet(x context.Context, m chan<- message, t *twitter.Tweet) {
 		if c == 0 {
 			continue
 		}
-		w.log.Trace(`Received Tweet "twitter.com/%s/status/%s", match on Chat %d (Keywords: %t).`, t.User.ScreenName, t.IDStr, c, k.Valid)
+		w.log.Trace(`Received Tweet "twitter.com/%s/status/%s", match on Chat %d (Keywords: %t).`, t.Source, t.ID, c, k.Valid)
 		if !k.Valid || (k.Valid && stringSplitContainsNLA(v, k.String)) {
-			w.log.Debug(`Sending Telegram update for Tweet "twitter.com/%s/status/%s" to chat %d..`, t.User.ScreenName, t.IDStr, c)
+			w.log.Debug(`Sending Telegram update for Tweet "twitter.com/%s/status/%s" to chat %d..`, t.Source, t.ID, c)
 			m <- message{tries: 2, msg: telegram.NewMessage(c, s)}
 			continue
 		}
-		w.log.Trace(`Skipping Telegram update for Tweet "twitter.com/%s/status/%s" to %d as it does not match keywords!`, t.User.ScreenName, t.IDStr, c)
+		w.log.Trace(`Skipping Telegram update for Tweet "twitter.com/%s/status/%s" to %d as it does not match keywords!`, t.Source, t.ID, c)
 	}
 	r.Close()
 }
@@ -206,7 +206,7 @@ func (w *Watcher) action(x context.Context, i int64, s string, a bool, c chan<- 
 	}
 	return "Awesome! Your following list was updated!"
 }
-func (w *Watcher) send(x context.Context, g *sync.WaitGroup, m chan message, t <-chan *twitter.Tweet) {
+func (w *Watcher) send(x context.Context, g *sync.WaitGroup, m chan message, t <-chan *twitter.TweetObj) {
 	w.log.Info("Starting Telegram sender thread..")
 	for g.Add(1); ; {
 		select {
