@@ -52,6 +52,9 @@ type mapping struct {
 
 func parseTweetText(v *twitter.TweetObj, t *twitter.TweetRaw) string {
 	s := html.UnescapeString(v.Text)
+	if v.Entities == nil {
+		return s
+	}
 	for i := range v.Entities.URLs {
 		s = strings.ReplaceAll(s, v.Entities.URLs[i].URL, v.Entities.URLs[i].ExpandedURL)
 	}
