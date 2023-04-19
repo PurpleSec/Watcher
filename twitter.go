@@ -110,7 +110,15 @@ func (w *Watcher) resolve(x context.Context, t *twitter.Client, a bool) {
 			w.log.Error("Error retrieving data about Twitter mappings from Twitter: %s!", err.Error())
 			continue
 		}
+		if r.Raw == nil || len(r.Raw.Users) == 0 {
+			// Mapping returned no results.
+			continue
+		}
 		for v := range r.Raw.Users {
+			if r.Raw.Users[v] == nil {
+				// Invalid user entry
+				continue
+			}
 			if _, ok := i[r.Raw.Users[v].ID]; ok {
 				w.log.Warning(`Duplicate ID value "%s" detected with username "%s"!`, r.Raw.Users[v].ID, r.Raw.Users[v].UserName)
 			}
@@ -121,7 +129,15 @@ func (w *Watcher) resolve(x context.Context, t *twitter.Client, a bool) {
 			w.log.Error("Error retrieving data about Twitter mappings from Twitter: %s!", err.Error())
 			continue
 		}
+		if r.Raw == nil || len(r.Raw.Users) == 0 {
+			// Mapping returned no results.
+			continue
+		}
 		for v := range r.Raw.Users {
+			if r.Raw.Users[v] == nil {
+				// Invalid user entry
+				continue
+			}
 			// We don't need to check for duplicates here.
 			i[r.Raw.Users[v].ID] = r.Raw.Users[v].UserName
 		}
