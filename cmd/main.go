@@ -25,7 +25,7 @@ import (
 
 var buildVersion = "unknown"
 
-const version = "v1.4.1"
+const version = "v1.4.2"
 
 const usage = `Twitter Watcher Telegram Bot ` + version + `
 Purple Security (losynth.com/purple) 2021 - 2023
