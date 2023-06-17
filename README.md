@@ -1,5 +1,9 @@
 # Twitter Watcher Telegram Bot
 
+**Sadly, Twitter has removed the posting feature from it's Free API tier (and removed Essential access)**
+**so I am archiving this project as the people that can afford the API prices probally have something**
+**else to use. Currently (as of 06/17/23, with proper API keys, this Project still functions if you need it**
+
 Golang Twitter Notification Bot for Telegram
 
 This is a bot for Telegram written in Golang, backed by a SQL database that is
